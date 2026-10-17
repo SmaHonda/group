@@ -158,8 +158,9 @@ const tag=s=>`<span class="tag ${s}">${s||'—'}</span>`;
 
 // ---- 連住合併 / 每日統計
 const hasLR=g=>g.latestRooms!==''&&g.latestRooms!=null&&!isNaN(g.latestRooms);
-const baseRooms=g=>hasLR(g)?+g.latestRooms:(+g.rooms||0);
-const roomsOf=g=>baseRooms(g)+extra;
+const baseRooms=g=>+g.rooms||0;
+const roomsOf=g=>baseRooms(g)+extra;            // 預約房數（室數＋T/C・D）
+const colRoomsOf=g=>(hasLR(g)?+g.latestRooms:0)+extra; // 已集客房數（集客房數，未填視為0，＋T/C・D）
 const rmTxt=g=>roomsOf(g)+(hasLR(g)?'＊':'');
 const idKey=g=>[g.custId,g.tcId,g.dId].map(x=>String(x??'').trim()).join('|');
 const endOf=g=>g.cin?fd(pd(g.cin)+nightsOf(g)*DAY):'';
@@ -183,7 +184,7 @@ function occupancy(){
     const a=pd(g.cin);if(a==null)continue;const n=nightsOf(g);
     for(let i=0;i<n;i++){const k=fd(a+i*DAY);let o=mp.get(k);if(!o)mp.set(k,o=EMPTY());const e=entry(g,k);
       if(w){o.wait.push(e);continue}
-      o.rooms+=roomsOf(g);if(hasLR(g))o.col+=roomsOf(g);if(g.registered)o.reg+=roomsOf(g);if(g.final)o.fin++;o.people+=N(g.latest);o.list.push(e)}}
+      o.rooms+=roomsOf(g);o.col+=colRoomsOf(g);if(g.registered)o.reg+=roomsOf(g);if(g.final)o.fin++;o.people+=N(g.latest);o.list.push(e)}}
   return mp;
 }
 const rowAttr=(m,g)=>m.rows.length>1?`data-mg="${esc(m.key)}"`:`data-id="${esc(g.id)}"`;
@@ -191,10 +192,11 @@ const mark=(m,k,none)=>m.rows.every(r=>r[k])?'✓':m.rows.some(r=>r[k])?'部分'
 const runTag=x=>x?`<span class="tag ${x}">${x}</span>`:'—';
 const uni=(m,f)=>{const v=m.rows.map(f);return v.every(x=>x===v[0])};
 const fv=v=>(v===''||v==null||isNaN(v))?'—':num(v);
-const NUMHEAD=`<th class="n">預約房數</th><th class="n">集客房數</th><th class="n" title="集客房數（未填則用預約房數）＋T/C・D">計入房數</th><th class="n">預約人數</th><th class="n">集客人數</th>`;
+const NUMHEAD=`<th class="n" title="室數＋T/C・D">預約房數</th><th class="n" title="集客房數（未填為0）＋T/C・D">集客房數</th><th class="n">預約人數</th><th class="n">集客人數</th>`;
 function numCells(m,g,night){
   const cv=(f,fmt)=>(night||uni(m,f))?fmt(f(g)):'<span class="cont">詳細</span>';
-  return `<td class="n">${cv(r=>r.rooms??'',fv)}</td><td class="n">${cv(r=>r.latestRooms??'',fv)}</td><td class="n"><b>${cv(roomsOf,String)}</b></td><td class="n">${cv(r=>r.people??'',fv)}</td><td class="n">${cv(r=>r.latest??'',fv)}</td>`;
+  const rm=x=>`${x}＋${extra}`;
+  return `<td class="n">${cv(r=>N(r.rooms),rm)}</td><td class="n"><b>${cv(r=>hasLR(r)?+r.latestRooms:0,rm)}</b></td><td class="n">${cv(r=>r.people??'',fv)}</td><td class="n">${cv(r=>r.latest??'',fv)}</td>`;
 }
 function groupRows(list,noAg){
   return list.map(({m,g,night,of})=>{const n=m.rows.length;
@@ -236,7 +238,7 @@ function viewDay(d){
     <label>查詢日期<input type="date" id="qd" value="${d}"></label>
     <button class="b" data-shift="-1">‹ 前一天</button><button class="b" data-shift="1">後一天 ›</button><button class="b" data-today>今天</button></div>
     ${statsHTML(o)}
-    <div class="hint">${lab(d)} 當晚，含非當天 check-in 的連住團體。連住已合併，點有 ×N 的列可展開每一天。預約房數＝室數＋${extra}（T/C・D），有填集客房數的團以集客房數計；「已集客房數」只計有填集客房數的團，「集客人數」只計「最新集客人數」有填的團。Waiting、已取消不計入。</div></div>
+    <div class="hint">${lab(d)} 當晚，含非當天 check-in 的連住團體。連住已合併，點有 ×N 的列可展開每一天。預約房數＝室數＋${extra}（T/C・D）；已集客房數＝集客房數（未填視為 0）＋${extra}，每團都加；集客人數只計「最新集客人數」有填的團。Waiting、已取消不計入。</div></div>
     <div class="panel tw">${o.list.length?`<table>${HEAD}${groupRows(o.list)}</table>`:'<div class="empty">這天沒有住宿的團體。</div>'}
     ${ex.length?`<h3>Waiting／已取消（不計入總數）</h3><table>${HEAD}${groupRows(ex)}</table>`:''}</div>`;
   $('#qd').onchange=e=>{qDay=e.target.value;viewDay(qDay)};
@@ -253,7 +255,7 @@ function viewRooms(){
     <label>起始日<input type="date" id="qf" value="${qFrom}"></label>
     <span class="hint">符合 ${rows.length} 天，點左邊的日期看右邊的團體明細。</span></div></div>
     <div class="md"><div class="ml">${rows.map(([k,v])=>`<div class="item ${k===qOpen?'on':''}" data-open="${k}"><b>${lab(k)} ${k.slice(0,4)}</b><span>${v.rooms} 間（集客 ${v.col}・登入 ${v.reg}）・集客 ${v.people} 人${cap?'・剩 '+(cap-v.rooms):''}</span>
-    <div class="meter"><i style="width:${v.rooms?v.col/v.rooms*100:0}%"></i></div></div>`).join('')||'<div class="empty">沒有符合條件的日期，試著調低房數。</div>'}</div>
+    <div class="meter"><i style="width:${v.rooms?Math.min(100,v.col/v.rooms*100):0}%"></i></div></div>`).join('')||'<div class="empty">沒有符合條件的日期，試著調低房數。</div>'}</div>
     ${sel?`<div class="mr"><h3 class="big">${lab(qOpen)} ${qOpen.slice(0,4)}</h3>${statsHTML(sel)}
     <div class="tw"><table>${HEAD}${groupRows(sel.list)}</table></div></div>`:''}</div>`;
   $('#qm').onchange=e=>{qMin=+e.target.value||0;viewRooms()};
@@ -278,7 +280,7 @@ function viewHome(){
   <h3>接下來一週</h3>`+week.map(k=>{const o=occ.get(k)||EMPTY();
     return `<div class="panel"><div class="bar" style="margin-bottom:6px;align-items:baseline"><h3 style="margin:0;cursor:pointer" data-goday="${k}">${lab(k)} ${k===today()?'（今天）':''}</h3>
     <span class="hint">${o.list.length} 團／預約 ${o.rooms} 間（已集客 ${o.col}・已登入 ${o.reg}）／集客 ${o.people} 人${cap?`／剩餘 ${cap-o.rooms} 間`:''}</span></div>
-    <div class="meter"><i style="width:${o.rooms?o.col/o.rooms*100:0}%"></i></div>
+    <div class="meter"><i style="width:${o.rooms?Math.min(100,o.col/o.rooms*100):0}%"></i></div>
     ${o.list.length||o.wait.length?`<div class="tw"><table><tr><th>団体名</th><th>旅行会社</th><th>狀態</th><th>催行</th><th>住宿</th>${NUMHEAD}<th>登入</th><th>FINAL</th></tr>${o.list.map(wrow).join('')}${o.wait.map(wrow).join('')}</table></div>`:'<div class="hint">沒有團體住宿。</div>'}</div>`}).join('');
   $('#hm').onchange=e=>{homeMin=+e.target.value||0;viewHome()};
   document.querySelectorAll('[data-goday]').forEach(x=>x.onclick=()=>goDay(x.dataset.goday));
@@ -291,7 +293,7 @@ function viewCal(){
   for(let i=0;i<lead;i++)cells+='<div></div>';
   for(let i=0;i<days;i++){const k=fd(first+i*DAY),o=occ.get(k),r=o?o.rooms:0;
     cells+=`<div class="c ${cap&&r>=cap?'risk':''}" data-day="${k}"><div class="bg" style="opacity:${Math.min(r/base,1)*0.45}"></div>
-    <div class="d">${i+1}</div>${o&&(o.list.length)?`<div class="r">${r}</div><div class="p">集客 ${o.col}房・${o.people}人</div><div class="meter"><i style="width:${r?o.col/r*100:0}%"></i></div>`:''}</div>`}
+    <div class="d">${i+1}</div>${o&&(o.list.length)?`<div class="r">${r}</div><div class="p">集客 ${o.col}房・${o.people}人</div><div class="meter"><i style="width:${r?Math.min(100,o.col/r*100):0}%"></i></div>`:''}</div>`}
   $('#view').innerHTML=`<div class="panel"><div class="bar"><label>月份<input type="month" id="qmo" value="${qMonth}"></label>
    <button class="b" data-mo="-1">‹ 上個月</button><button class="b" data-mo="1">下個月 ›</button><button class="b" data-thism>本月</button>
    <span class="hint">大數字＝預約房數；「集客」＝已集客房數與集客人數；綠條＝已集客房數占預約房數的比例。顏色越深越接近${cap?'總房數':'本月最高'}${cap?'，紅框＝已達總房數':''}。點日期看明細。</span></div>
@@ -376,7 +378,7 @@ function openAct(key){
   const first=rows.find(hasAct)||rows[0];
   function draw(vals,scope){
     $('#frm').innerHTML=`<h3 style="margin-top:0">實績輸入：${esc(m.g.name)}</h3>
-    <p class="hint">${lab(m.cin)} → ${lab(m.cout)}（${m.nights}泊）｜預約房數 ${num(m.g.rooms)||'—'}／集客房數 ${num(m.g.latestRooms)||'—'}（計入含T/C・D：${roomsOf(m.g)}）・預約人數 ${num(m.g.people)||'—'}／集客人數 ${num(m.g.latest)||'—'}・1人單價 ${num(m.g.unitPerson)||'—'}。這裡只填實績，預約欄位不會被改動。數字是「每晚」的間數與單價。</p>
+    <p class="hint">${lab(m.cin)} → ${lab(m.cout)}（${m.nights}泊）｜預約房數 ${N(m.g.rooms)}＋${extra}／集客房數 ${hasLR(m.g)?+m.g.latestRooms:0}＋${extra}・預約人數 ${num(m.g.people)||'—'}／集客人數 ${num(m.g.latest)||'—'}・1人單價 ${num(m.g.unitPerson)||'—'}。這裡只填實績，預約欄位不會被改動。數字是「每晚」的間數與單價。</p>
     ${rows.length>1?`<label>套用範圍<select id="scope"><option value="all" ${scope==='all'?'selected':''}>全部 ${rows.length} 筆（同一內容）</option>${rows.map(r=>`<option value="${esc(r.id)}" ${scope===r.id?'selected':''}>只有 ${lab(r.cin)}${nightsOf(r)>1?' 起 '+nightsOf(r)+' 晚':''}</option>`).join('')}</select></label>`:''}
     <div class="grid" style="margin-top:10px">${ACT.filter(a=>a[2]==='number').map(([k,l])=>`<label>${l}<input name="${k}" type="number" step="any" min="0" value="${esc(vals[k]??'')}"></label>`).join('')}
     <label class="w2">實績備註<input name="actNote" value="${esc(vals.actNote??'')}"></label></div>
@@ -430,7 +432,7 @@ function openEdit(id,draft){
     if(t==='run')return `<label>${l}<select name="${k}"><option value="">—</option>${RUNST.map(o=>`<option ${v===o?'selected':''}>${o}</option>`).join('')}</select></label>`;
     if(t==='check'){const L=k==='final'?['未FINAL（未收到名單）','已FINAL（已收到名單）']:['未登入','已登入'];return `<label>${l}<select name="${k}"><option value="">${L[0]}</option><option value="1" ${v?'selected':''}>${L[1]}</option></select></label>`}
     return `<label class="${k==='note'?'w2':''}">${l}<input name="${k}" type="${t}" value="${esc(v)}" ${k==='nights'?'placeholder="自動計算"':''}></label>`}).join('')+
-   `</div><p class="hint">泊數留空會由 C/IN、C/OUT 自動計算。編輯「最新集客人數」或「集客房數」時，更新日會自動填今天。有填集客房數，統計就用它取代室數（另加 T/C・D）。按「儲存」後會先出現確認視窗，列出這次的更動。實績（實際入住房型、單價）請到「實績」頁輸入。</p>
+   `</div><p class="hint">泊數留空會由 C/IN、C/OUT 自動計算。編輯「最新集客人數」或「集客房數」時，更新日會自動填今天。預約房數用室數、已集客房數用集客房數（未填視為 0），兩者都另加 T/C・D。按「儲存」後會先出現確認視窗，列出這次的更動。實績（實際入住房型、單價）請到「實績」頁輸入。</p>
    <div class="bar" style="justify-content:space-between;margin:0"><div>${isNew?'':'<button type="button" class="b" id="del" style="color:var(--bad)">刪除</button>'}</div>
    <div class="bar" style="margin:0"><button type="button" class="b" id="cx">取消</button><button class="b p">儲存</button></div></div>`;
   if(!$('#dlg').open)$('#dlg').showModal();
