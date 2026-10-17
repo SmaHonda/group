@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>團體預約管理</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#faf6f0;--panel:#fff;--ink:#2b3a4f;--sub:#6c7a8f;--bd:#2b3a4f;--acc:#9fb0e6;--accd:#3f54a8;--hl:#eef1fd;--ok:#2f7d5b;--warn:#c47a12;--bad:#c0392b;--or:#f0a63a;--dot:#ddd5c6;--line:#e3e7ef}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#171d2b;--panel:#222b3d;--ink:#e9edf5;--sub:#9aa6bb;--bd:#05070c;--acc:#6f82c8;--accd:#aab9f0;--hl:#2b3652;--ok:#5fc097;--warn:#e8a54a;--bad:#ee7b70;--dot:#27304a;--line:#34405a}}
+*{box-sizing:border-box}
+body{margin:0;display:grid;grid-template-columns:104px 1fr;min-height:100vh;color:var(--ink);background:radial-gradient(var(--dot) 1.2px,transparent 1.4px) 0 0/22px 22px,var(--bg);font:15px/1.65 "Noto Sans TC","Yu Gothic","Hiragino Sans","Microsoft JhengHei",sans-serif}
+#side{position:sticky;top:0;height:100vh;border-right:3px solid var(--bd);background:var(--bg);display:flex;flex-direction:column;align-items:center;padding:16px 8px;gap:6px}
+.logo{width:76px;padding:10px 4px;text-align:center;font:900 16px/1.25 "Noto Serif TC",serif;background:var(--panel);border:3px solid var(--bd);border-radius:12px;box-shadow:3px 3px 0 var(--bd);transform:rotate(-3deg);margin-bottom:16px;color:var(--or)}
+#tabs{display:flex;flex-direction:column;gap:6px;width:100%}
+#tabs button{border:0;background:none;color:var(--sub);font:inherit;font-size:13px;font-weight:500;cursor:pointer;padding:8px 2px;border-radius:12px;display:flex;flex-direction:column;align-items:center;gap:0}
+#tabs button i{font-style:normal;font-size:22px;line-height:1.2}
+#tabs button.on{color:var(--ink);background:var(--hl);font-weight:700}
+#wrap{min-width:0;padding:14px 26px 50px;max-width:1360px;width:100%}
+#top{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;align-items:center}
+#top label{flex-direction:row;align-items:center;gap:6px;font-size:13px;color:var(--ink)}
+#st{font-size:12px;color:var(--sub);margin-right:auto}
+.ttl{text-align:center;margin:8px 0 22px}
+.ttl h2{margin:0;font:900 38px/1.2 "Noto Serif TC",serif}
+.pill{display:inline-block;margin-top:6px;padding:1px 14px;font-size:13px;font-weight:700;border:2.5px solid var(--bd);border-radius:20px;background:var(--panel);box-shadow:2px 2px 0 var(--bd)}
+.panel,.mr,.item{background:var(--panel);border:3px solid var(--bd);border-radius:18px;box-shadow:4px 4px 0 var(--bd)}
+.panel{padding:16px 18px;margin-bottom:20px}
+.mr{padding:18px 20px;border-top:14px solid var(--acc)}
+.md{display:grid;grid-template-columns:minmax(240px,340px) 1fr;gap:26px;align-items:start}
+.ml{display:flex;flex-direction:column;gap:14px;max-height:78vh;overflow:auto;padding:2px 8px 8px 2px}
+.item{padding:10px 16px;cursor:pointer;position:relative}
+.item b{display:block;font:700 17px/1.4 "Noto Serif TC",serif}
+.item span{font-size:13px;color:var(--sub)}
+.item.on{background:var(--hl)}
+.item.on::after{content:"";position:absolute;right:-13px;top:50%;margin-top:-9px;border:9px solid transparent;border-left:10px solid var(--bd);border-right:0}
+.bar{display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin-bottom:12px}
+label{display:flex;flex-direction:column;font-size:12px;color:var(--sub);gap:3px}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--panel);border:2px solid var(--bd);border-radius:10px;padding:6px 10px;min-width:0}
+input[type=checkbox]{accent-color:var(--accd);width:16px;height:16px}
+input:focus-visible,select:focus-visible,button:focus-visible,textarea:focus-visible{outline:3px solid var(--acc);outline-offset:1px}
+button.b{font:inherit;font-weight:700;font-size:14px;border:2.5px solid var(--bd);background:var(--panel);color:var(--ink);padding:5px 14px;border-radius:20px;cursor:pointer;box-shadow:2px 2px 0 var(--bd)}
+button.b:active{transform:translate(2px,2px);box-shadow:none}
+button.b.p{background:var(--or);color:#2b3a4f}
+.stats{display:flex;gap:30px;flex-wrap:wrap;margin:4px 0 12px}
+.stats div{font-size:12px;color:var(--sub)}
+.stats b{display:block;font:900 30px/1.2 "Noto Serif TC",serif;color:var(--ink)}
+.stats b.risk{color:var(--bad)}
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:8px 10px;border-bottom:1.5px solid var(--line);text-align:left;white-space:nowrap}
+th{font-size:12px;color:var(--sub);font-weight:700;background:var(--hl)}
+td.n,th.n{text-align:right}
+tr.click{cursor:pointer}tr.click:hover td{background:var(--hl)}
+.tag{display:inline-block;padding:0 10px;border-radius:12px;font-size:12px;font-weight:700;border:2px solid;background:var(--panel)}
+.決定{color:var(--ok)}.假預約{color:var(--warn)}.キャンセル{color:var(--bad)}
+.dim td{color:var(--sub);text-decoration:line-through}
+.cont{color:var(--accd);font-size:12px;font-weight:700}
+.sub td{background:var(--hl)}
+dialog{border:3px solid var(--bd);border-radius:18px;box-shadow:6px 6px 0 var(--bd);background:var(--panel);color:var(--ink);width:min(780px,96vw);padding:20px}
+dialog::backdrop{background:#2b3a4f99}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.grid .w2{grid-column:span 2}
+h3{margin:14px 0 8px;font:700 17px/1.4 "Noto Serif TC",serif}
+h3.big{margin:0 0 6px;font-size:26px;font-weight:900}
+.empty{color:var(--sub);padding:18px 4px}
+.hint{font-size:12.5px;color:var(--sub)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.cal .h{font-size:12px;color:var(--sub);text-align:center;font-weight:700}
+.cal .c{min-height:80px;border:2.5px solid var(--bd);border-radius:12px;padding:4px 8px;cursor:pointer;background:var(--panel);position:relative;overflow:hidden}
+.cal .c:hover{background:var(--hl)}
+.cal .c .d{font-size:12px;color:var(--sub)}
+.cal .c .r{font:900 22px/1.2 "Noto Serif TC",serif}
+.cal .c .p{font-size:11px;color:var(--sub)}
+.cal .c .bg{position:absolute;inset:0;background:var(--or);pointer-events:none}
+.cal .c>*:not(.bg){position:relative}
+.cal .c.risk{border-color:var(--bad);box-shadow:2px 2px 0 var(--bad)}
+.cal .c.risk .r{color:var(--bad)}
+@media (max-width:800px){body{grid-template-columns:1fr}#side{position:fixed;top:auto;bottom:0;left:0;right:0;height:auto;flex-direction:row;border-right:0;border-top:3px solid var(--bd);z-index:5;padding:4px}.logo{display:none}#tabs{flex-direction:row}#tabs button{flex:1;font-size:11px}#wrap{padding:12px 12px 90px}.md{grid-template-columns:1fr}.ml{max-height:none;flex-direction:row;overflow-x:auto}.item{min-width:200px}.item.on::after{display:none}.ttl h2{font-size:28px}}
+</style>
+</head>
+<body>
+<aside id="side"><div class="logo">團體<br>管理</div>
+<nav id="tabs">
+  <button data-t="home" class="on"><i>⌂</i>首頁</button>
+  <button data-t="day"><i>◴</i>日期</button>
+  <button data-t="cal"><i>▦</i>月曆</button>
+  <button data-t="rooms"><i>▥</i>房數</button>
+  <button data-t="agency"><i>⚑</i>旅行社</button>
+  <button data-t="all"><i>☰</i>全部</button>
+</nav></aside>
+<div id="wrap">
+<header id="top">
+  <span id="st"></span>
+  <label>總房數<input id="cap" type="number" min="0" style="width:80px"></label>
+  <label><input id="inclTent" type="checkbox" checked> 計入假預約</label>
+  <button class="b" id="pull" title="從試算表重新讀取">↻ 重新讀取</button>
+  <button class="b" id="cfg">⚙ 試算表</button>
+  <button class="b" id="imp">匯入</button>
+  <button class="b" id="exp">匯出</button>
+  <button class="b p" id="add">＋ 新增團體</button>
+  <input id="file" type="file" accept=".xlsx,.xls,.csv" hidden>
+</header>
+<main id="view"></main>
+</div>
+
+<dialog id="dlg"><form method="dialog" id="frm"></form></dialog>
+
+<script>
+const $=s=>document.querySelector(s);
+const DAY=86400000;
+const FIELDS=[ // key, 標籤, type, 公司Excel欄名
+['cin','C/IN日期','date','C/IN日期'],['cout','C/OUT日期','date','C/OUT日期'],['nights','泊數','number','泊数'],
+['received','受付日','date','受付日'],['changed','変更日','date','変更日'],['status','狀態','status','状態'],
+['segment','セグメント','text','セグメント'],['name','団体名','text','団体名'],['agency','旅行会社名','text','旅行会社名'],
+['office','案内所','text','案内所'],['contact','案内所担当者','text','案内所担当者'],['cond','条件','text','条件'],
+['tax','税別（込）','text','税別（込）'],['rooms','室数','number','室数'],['unitRoom','１室単価','number','１室単価'],
+['total','宿泊料金','number','宿泊料金'],['unitPerson','１名単価','number','１名単価'],['people','人数','number','人数'],['note','備考','text','備考'],
+['custId','客人系統編號','text','客人系統編號'],['tcId','T/C系統編號','text','T/C系統編號'],['dId','D系統編號','text','D系統編號'],
+['latest','最新集客人數','number','最新集客人數'],['latestAt','人數更新日','date','人數更新日'],['registered','已登入系統','check','已登入系統']];
+const STATUS=['決定','假預約','キャンセル'];
+let data=[];let cap=0;let tab='home';let homeMin=90;
+try{data=JSON.parse(localStorage.getItem('grp')||'[]');cap=+localStorage.getItem('cap')||0}catch(e){}
+const save=()=>{try{localStorage.setItem('grp',JSON.stringify(data));localStorage.setItem('cap',cap)}catch(e){}};
+
+// ---- date helpers
+const pd=s=>{if(!s)return null;const [y,m,d]=s.split('-').map(Number);return Date.UTC(y,m-1,d)};
+const fd=ms=>{const d=new Date(ms);return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0')};
+const wk=ms=>'日一二三四五六'[new Date(ms).getUTCDay()];
+const lab=s=>s?s.slice(5).replace('-','/')+'('+wk(pd(s))+')':'';
+const today=()=>{const n=new Date();return fd(Date.UTC(n.getFullYear(),n.getMonth(),n.getDate()))};
+function nightsOf(g){const a=pd(g.cin);if(a==null)return 0;const b=pd(g.cout);return b!=null?Math.max(0,Math.round((b-a)/DAY)):(+g.nights||1)}
+const headcount=g=>(g.latest!==''&&g.latest!=null&&!isNaN(g.latest))?+g.latest:(+g.people||0);
+const counted=g=>g.status==='決定'||(g.status==='假預約'&&$('#inclTent').checked);
+function stays(g,d){const a=pd(g.cin);if(a==null)return false;const x=pd(d);return x>=a&&x<a+nightsOf(g)*DAY}
+const nextId=()=>'G'+String(data.reduce((m,g)=>Math.max(m,+(g.id||'G0').slice(1)||0),0)+1).padStart(4,'0');
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const num=n=>(n===''||n==null||isNaN(n))?'':Number(n).toLocaleString();
+const tag=s=>`<span class="tag ${s}">${s||'—'}</span>`;
+
+// ---- occupancy map
+function occupancy(){
+  const m=new Map();
+  for(const g of data){ if(!counted(g))continue;
+    const a=pd(g.cin);if(a==null)continue;const n=nightsOf(g);
+    for(let i=0;i<n;i++){const k=fd(a+i*DAY);let o=m.get(k);if(!o)m.set(k,o={rooms:0,people:0,list:[]});
+      o.rooms+=+g.rooms||0;o.people+=headcount(g);o.list.push({g,night:i+1,of:n})}}
+  return m;
+}
+
+// ---- row renderers
+function groupRows(list,opt={}){
+  return list.map(({g,night,of})=>`<tr class="click ${g.status==='キャンセル'?'dim':''}" data-id="${g.id}">
+   <td>${esc(g.id)}</td><td>${esc(g.name)}</td><td>${esc(g.agency)}</td><td>${tag(g.status)}</td>
+   <td>${lab(g.cin)} → ${lab(g.cout)} ${of>1?`<span class="cont">${night?`第${night}晚/共${of}晚`:`${of}泊`}</span>`:''}</td>
+   <td class="n">${num(g.rooms)}</td><td class="n">${num(headcount(g))}</td>
+   <td>${esc(g.custId)}</td><td>${esc(g.tcId)}</td><td>${esc(g.dId)}</td>
+   <td>${g.registered?'✓':'<span class="hint">未登入</span>'}</td><td>${esc(g.note)}</td></tr>`).join('');
+}
+const HEAD=`<tr><th>編號</th><th>団体名</th><th>旅行会社</th><th>狀態</th><th>住宿期間</th><th class="n">房數</th><th class="n">人數</th><th>客人編號</th><th>T/C</th><th>D</th><th>系統登入</th><th>備註</th></tr>`;
+
+// ---- views
+function viewDay(d){
+  const occ=occupancy();const o=occ.get(d)||{rooms:0,people:0,list:[]};
+  const others=data.filter(g=>g.status==='キャンセル'&&stays(g,d));
+  const left=cap?cap-o.rooms:null;
+  $('#view').innerHTML=`<div class="panel"><div class="bar">
+    <label>查詢日期<input type="date" id="qd" value="${d}"></label>
+    <button class="b" data-shift="-1">‹ 前一天</button><button class="b" data-shift="1">後一天 ›</button><button class="b" data-today>今天</button></div>
+    <div class="stats"><div>團體數<b>${o.list.length}</b></div><div>房數<b>${o.rooms}</b></div><div>集客人數<b>${o.people}</b></div>
+    ${cap?`<div>剩餘房數<b class="${left<=0?'risk':''}">${left}</b></div>`:''}</div>
+    <div class="hint">包含非當天 check-in、但當晚住宿中的連住團體（${lab(d)} 當晚）。已取消的不計。</div></div>
+    <div class="panel tw">${o.list.length?`<table>${HEAD}${groupRows(o.list)}</table>`:'<div class="empty">這天沒有住宿的團體。</div>'}
+    ${others.length?`<h3>已取消（參考）</h3><table>${HEAD}${groupRows(others.map(g=>({g,night:0,of:nightsOf(g)})))}</table>`:''}</div>`;
+  $('#qd').onchange=e=>{qDay=e.target.value;viewDay(qDay)};
+  document.querySelectorAll('[data-shift]').forEach(b=>b.onclick=()=>{qDay=fd(pd(qDay)+b.dataset.shift*DAY);viewDay(qDay)});
+  document.querySelector('[data-today]').onclick=()=>{qDay=today();viewDay(qDay)};
+}
+let qDay=today(),qMin=90,qOpen=null,qAg='';
+function viewRooms(){
+  const occ=occupancy();
+  const rows=[...occ.entries()].filter(([k,v])=>v.rooms>=qMin&&k>=qFrom).sort();
+  if(!rows.find(r=>r[0]===qOpen))qOpen=rows.length?rows[0][0]:null;
+  const sel=qOpen&&occ.get(qOpen);
+  $('#view').innerHTML=`<div class="panel"><div class="bar" style="margin:0">
+    <label>房數達到<input type="number" id="qm" value="${qMin}" style="width:90px"></label>
+    <label>起始日<input type="date" id="qf" value="${qFrom}"></label>
+    <span class="hint">符合 ${rows.length} 天，點左邊的日期看右邊的團體明細。</span></div></div>
+    <div class="md"><div class="ml">${rows.map(([k,v])=>`<div class="item ${k===qOpen?'on':''}" data-open="${k}"><b>${lab(k)} ${k.slice(0,4)}</b><span>${v.rooms} 間・${v.list.length} 團・${v.people} 人${cap?'・剩 '+(cap-v.rooms):''}</span></div>`).join('')||'<div class="empty">沒有符合條件的日期，試著調低房數。</div>'}</div>
+    ${sel?`<div class="mr"><h3 class="big">${lab(qOpen)} ${qOpen.slice(0,4)}</h3>
+    <div class="stats"><div>總房數<b class="risk">${sel.rooms}</b></div><div>集客人數<b>${sel.people}</b></div><div>團數<b>${sel.list.length}</b></div>${cap?`<div>剩餘房數<b>${cap-sel.rooms}</b></div>`:''}</div>
+    <div class="tw"><table>${HEAD}${groupRows(sel.list)}</table></div></div>`:''}</div>`;
+  $('#qm').onchange=e=>{qMin=+e.target.value||0;viewRooms()};
+  $('#qf').onchange=e=>{qFrom=e.target.value||'0000-01-01';viewRooms()};
+  document.querySelectorAll('[data-open]').forEach(r=>r.onclick=()=>{qOpen=r.dataset.open;viewRooms()});
+}
+function goDay(k){qDay=k;tab='day';document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t==='day'));render()}
+function viewHome(){
+  const occ=occupancy();const t0=pd(today());
+  const end=new Date(t0);end.setUTCMonth(end.getUTCMonth()+6);
+  const risky=[...occ.entries()].filter(([k,v])=>v.rooms>=homeMin&&pd(k)>=t0&&pd(k)<=end.getTime()).sort();
+  const week=[];for(let i=0;i<7;i++)week.push(fd(t0+i*DAY));
+  $('#view').innerHTML=`<div class="panel"><div class="bar" style="margin-bottom:6px"><h3 style="margin:0 auto 0 0">半年內房數達標的日期（${lab(today())} 起至 ${fd(end.getTime())}）</h3>
+    <label>房數達到<input type="number" id="hm" value="${homeMin}" style="width:80px"></label></div>
+    ${risky.length?`<div class="stats"><div>符合天數<b class="risk">${risky.length}</b></div><div>最高房數<b>${Math.max(...risky.map(r=>r[1].rooms))}</b></div></div>
+    <div class="tw"><table><tr><th>日期</th><th class="n">總房數</th><th class="n">人數</th><th class="n">團數</th>${cap?'<th class="n">剩餘</th>':''}<th>團體</th></tr>
+    ${risky.map(([k,v])=>`<tr class="click" data-goday="${k}"><td>${lab(k)} ${k.slice(0,4)}</td><td class="n"><b>${v.rooms}</b></td><td class="n">${v.people}</td><td class="n">${v.list.length}</td>${cap?`<td class="n" style="color:${cap-v.rooms<=0?'var(--bad)':'inherit'}">${cap-v.rooms}</td>`:''}<td class="hint">${esc(v.list.map(x=>x.g.name).join('、')).slice(0,60)}</td></tr>`).join('')}</table></div>`
+    :`<div class="empty">半年內沒有房數達 ${homeMin} 的日子。${data.length?'':'還沒有資料，請先新增或匯入。'}</div>`}
+    <div class="hint">點日期看當天明細。${$('#inclTent').checked?'已計入假預約。':'僅計決定。'}</div></div>
+  <h3>接下來一週</h3>`+week.map(k=>{const o=occ.get(k)||{rooms:0,people:0,list:[]};
+    return `<div class="panel"><div class="bar" style="margin-bottom:6px;align-items:baseline"><h3 style="margin:0;cursor:pointer" data-goday="${k}">${lab(k)} ${k===today()?'（今天）':''}</h3>
+    <span class="hint">${o.list.length} 團／${o.rooms} 間／${o.people} 人${cap?`／剩餘 ${cap-o.rooms} 間`:''}</span></div>
+    ${o.list.length?`<div class="tw"><table><tr><th>団体名</th><th>旅行会社</th><th>狀態</th><th>住宿</th><th class="n">房數</th><th class="n">人數</th></tr>
+    ${o.list.map(({g,night,of})=>`<tr class="click" data-id="${g.id}"><td>${esc(g.name)}</td><td>${esc(g.agency)}</td><td>${tag(g.status)}</td>
+    <td>${of>1?`<span class="cont">第${night}晚／共${of}晚</span>`:'一泊'}</td><td class="n">${num(g.rooms)}</td><td class="n">${num(headcount(g))}</td></tr>`).join('')}</table></div>`
+    :'<div class="hint">沒有團體住宿。</div>'}</div>`}).join('');
+  $('#hm').onchange=e=>{homeMin=+e.target.value||0;viewHome()};
+  document.querySelectorAll('[data-goday]').forEach(x=>x.onclick=()=>goDay(x.dataset.goday));
+}
+let qFrom=today(),qMonth=today().slice(0,7);
+function viewCal(){
+  const occ=occupancy();const [y,m]=qMonth.split('-').map(Number);
+  const first=Date.UTC(y,m-1,1),days=new Date(y,m,0).getDate(),lead=new Date(first).getUTCDay();
+  let max=0;for(let i=0;i<days;i++){const o=occ.get(fd(first+i*DAY));if(o)max=Math.max(max,o.rooms)}
+  const base=cap||max||1;let cells='';
+  for(let i=0;i<lead;i++)cells+='<div></div>';
+  for(let i=0;i<days;i++){const k=fd(first+i*DAY),o=occ.get(k),r=o?o.rooms:0,ratio=r/base;
+    cells+=`<div class="c ${cap&&r>=cap?'risk':''}" data-day="${k}"><div class="bg" style="opacity:${Math.min(ratio,1)*0.45}"></div>
+    <div class="d">${i+1}</div>${o?`<div class="r">${r}</div><div class="p">${o.list.length}團／${o.people}人</div>`:''}</div>`}
+  $('#view').innerHTML=`<div class="panel"><div class="bar"><label>月份<input type="month" id="qmo" value="${qMonth}"></label>
+   <button class="b" data-mo="-1">‹ 上個月</button><button class="b" data-mo="1">下個月 ›</button>
+   <span class="hint">數字＝房數。顏色越深越接近${cap?'總房數':'本月最高'}${cap?'，紅框＝已達總房數':''}。點日期看明細。</span></div>
+   <div class="cal">${'日一二三四五六'.split('').map(x=>`<div class="h">${x}</div>`).join('')}${cells}</div></div>`;
+  $('#qmo').onchange=e=>{if(e.target.value){qMonth=e.target.value;viewCal()}};
+  document.querySelectorAll('[data-mo]').forEach(b=>b.onclick=()=>{const d=new Date(Date.UTC(y,m-1+ +b.dataset.mo,1));qMonth=fd(d.getTime()).slice(0,7);viewCal()});
+  document.querySelectorAll('[data-day]').forEach(c=>c.onclick=()=>{qDay=c.dataset.day;tab='day';document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t==='day'));render()});
+}
+function viewAgency(){
+  const names=[...new Set(data.map(g=>g.agency).filter(Boolean))].sort();
+  if(!names.includes(qAg))qAg=names[0]||'';
+  const list=data.filter(g=>g.agency===qAg).sort((a,b)=>(a.cin||'').localeCompare(b.cin||''));
+  const live=list.filter(g=>counted(g));
+  const cnt=n=>data.filter(g=>g.agency===n&&counted(g)).length;
+  $('#view').innerHTML=`<div class="md"><div class="ml">${names.map(n=>`<div class="item ${n===qAg?'on':''}" data-ag="${esc(n)}"><b>${esc(n)}</b><span>${cnt(n)} 團</span></div>`).join('')||'<div class="empty">還沒有資料。</div>'}</div>
+   ${qAg?`<div class="mr"><h3 class="big">${esc(qAg)}</h3>
+   <div class="stats"><div>團體數<b>${live.length}</b></div><div>總房晚<b>${live.reduce((s,g)=>s+(+g.rooms||0)*nightsOf(g),0)}</b></div><div>人數合計<b>${live.reduce((s,g)=>s+headcount(g),0)}</b></div></div>
+   <div class="tw"><table>${HEAD}${groupRows(list.map(g=>({g,night:0,of:nightsOf(g)})))}</table></div></div>`:''}</div>`;
+  document.querySelectorAll('[data-ag]').forEach(x=>x.onclick=()=>{qAg=x.dataset.ag;viewAgency()});
+}
+let qText='',qStat='';
+function viewAll(){
+  const list=data.filter(g=>(!qStat||g.status===qStat)&&(!qText||JSON.stringify(g).includes(qText))).sort((a,b)=>(a.cin||'').localeCompare(b.cin||''));
+  const unreg=data.filter(g=>!g.registered&&g.status!=='キャンセル').length;
+  $('#view').innerHTML=`<div class="panel"><div class="bar"><label>搜尋<input id="qt" value="${esc(qText)}" placeholder="団体名、編號…"></label>
+   <label>狀態<select id="qs"><option value="">全部</option>${STATUS.map(s=>`<option ${qStat===s?'selected':''}>${s}</option>`).join('')}</select></label>
+   <span class="hint">${list.length} 筆；尚未登入公司系統：<b>${unreg}</b> 筆</span></div>
+   <div class="tw">${list.length?`<table>${HEAD}${groupRows(list.map(g=>({g,night:0,of:nightsOf(g)})))}</table>`:'<div class="empty">還沒有資料。按右上角「新增團體」或「匯入 Excel」。</div>'}</div></div>`;
+  $('#qt').onchange=e=>{qText=e.target.value;viewAll()};$('#qs').onchange=e=>{qStat=e.target.value;viewAll()};
+}
+const TITLE={home:'首頁',day:'日期查詢',cal:'月曆',rooms:'房數查詢',agency:'旅行社查詢',all:'全部團體'};
+function render(){({home:viewHome,day:()=>viewDay(qDay),cal:viewCal,rooms:viewRooms,agency:viewAgency,all:viewAll})[tab]();
+  $('#view').insertAdjacentHTML('afterbegin',`<div class="ttl"><h2>${TITLE[tab]}</h2><span class="pill">${data.filter(g=>g.status!=='キャンセル').length} 個有效團體</span></div>`)}
+
+// ---- edit dialog
+function openEdit(id){
+  const g=data.find(x=>x.id===id)||{id:'',status:'決定',registered:false,tax:'税別'};
+  const isNew=!g.id;
+  $('#frm').innerHTML=`<h3 style="margin-top:0">${isNew?'新增團體':'編輯 '+esc(g.id)}</h3><div class="grid">`+
+   FIELDS.map(([k,l,t])=>{const v=g[k]??'';
+    if(t==='status')return `<label>${l}<select name="${k}">${STATUS.map(s=>`<option ${v===s?'selected':''}>${s}</option>`).join('')}</select></label>`;
+    if(t==='check')return `<label>${l}<select name="${k}"><option value="">未登入</option><option value="1" ${v?'selected':''}>已登入</option></select></label>`;
+    return `<label class="${k==='note'?'w2':''}">${l}<input name="${k}" type="${t}" value="${esc(v)}" ${k==='nights'?'placeholder="自動計算"':''}></label>`}).join('')+
+   `</div><p class="hint">泊數留空會由 C/IN、C/OUT 自動計算。編輯「最新集客人數」時，更新日會自動填今天。</p>
+   <div class="bar" style="justify-content:space-between;margin:0"><div>${isNew?'':'<button class="b" value="del" style="color:var(--bad)">刪除</button>'}</div>
+   <div class="bar" style="margin:0"><button class="b" value="x">取消</button><button class="b p" value="ok">儲存</button></div></div>`;
+  $('#dlg').showModal();
+  $('#frm').onsubmit=e=>{
+    const v=e.submitter&&e.submitter.value;
+    if(v==='del'){if(confirm('確定刪除這個團體？')){data=data.filter(x=>x.id!==id);save();render();sync({action:'delete',id})}return}
+    if(v!=='ok')return;
+    const f=new FormData($('#frm'));const n={...g,id:g.id||nextId()};
+    FIELDS.forEach(([k,,t])=>{let x=f.get(k)??'';if(t==='number'&&x!=='')x=+x;if(t==='check')x=!!x;n[k]=x});
+    if(n.latest!==g.latest&&n.latest!==''&&n.latestAt===(g.latestAt??''))n.latestAt=today();
+    if(!n.nights&&n.cin&&n.cout)n.nights=nightsOf(n);
+    if(n.cin&&!n.cout&&n.nights)n.cout=fd(pd(n.cin)+n.nights*DAY);
+    if(isNew)data.push(n);else data[data.indexOf(g)]=n;
+    save();render();sync({action:'upsert',records:[toRec(n)]});
+  };
+}
+
+// ---- Excel I/O
+const iso=v=>{if(v==null||v==='')return '';if(v instanceof Date)return fd(Date.UTC(v.getFullYear(),v.getMonth(),v.getDate(),12)+0);
+  const s=String(v).replace(/[./]/g,'-');const m=s.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);return m?m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0'):''};
+function importFile(f){
+  const r=new FileReader();r.onload=e=>{
+    const wb=XLSX.read(e.target.result,{type:'array',cellDates:true});
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+    let add=0;
+    for(const row of rows){
+      const g={id:nextId(),registered:false};
+      FIELDS.forEach(([k,,t,h])=>{let v=row[h];if(v===undefined)v=row[FIELDS.find(x=>x[0]===k)[1]];if(v===undefined)v='';
+        if(t==='date')v=iso(v);else if(t==='number')v=v===''?'':+v;else if(t==='check')v=v===true||v==='✓'||v==='1'||v==='已登入';else v=String(v);g[k]=v});
+      if(row['編號'])g.id=String(row['編號']);
+      if(!STATUS.includes(g.status))g.status=g.status==='仮予約'?'假預約':'決定';
+      if(!g.nights&&g.cin&&g.cout)g.nights=nightsOf(g);
+      if(!g.cin&&!g.name)continue;
+      data.push(g);add++;
+    }
+    save();render();alert('已匯入 '+add+' 筆');
+    if(add)sync({action:'upsert',records:data.slice(-add).map(toRec)});
+  };r.readAsArrayBuffer(f);
+}
+function exportFile(){
+  const rows=data.map(g=>{const o={'編號':g.id};FIELDS.forEach(([k,l,t,h])=>o[h]=t==='check'?(g[k]?'✓':''):g[k]);return o});
+  const ws=XLSX.utils.json_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'團體');
+  XLSX.writeFile(wb,'團體預約_'+today()+'.xlsx');
+}
+
+// ---- Google 試算表同步
+let cfg={};try{cfg=JSON.parse(localStorage.getItem('cfg')||'{}')}catch(e){}
+const setSt=(t,bad)=>{const s=$('#st');s.textContent=t;s.style.color=bad?'var(--bad)':'var(--sub)'};
+const toRec=g=>{const o={'編號':g.id};FIELDS.forEach(([k,,t,h])=>o[h]=t==='check'?(g[k]?'1':''):(g[k]??''));return o};
+function fromRec(r){
+  const g={id:String(r['編號'])};
+  FIELDS.forEach(([k,,t,h])=>{let v=r[h];if(v==null)v='';
+    if(t==='date')v=iso(v);else if(t==='number')v=v===''?'':+v;else if(t==='check')v=(v===true||v===1||v==='1'||v==='✓');else v=String(v);g[k]=v});
+  if(!STATUS.includes(g.status))g.status=g.status==='仮予約'?'假預約':'決定';
+  if(!g.nights&&g.cin&&g.cout)g.nights=nightsOf(g);
+  return g;
+}
+async function sync(body){
+  if(!cfg.url)return;setSt('同步中…');
+  try{
+    const r=await fetch(cfg.url,{method:'POST',body:JSON.stringify({token:cfg.token,...body})});
+    const j=await r.json();if(j.error)throw new Error(j.error);
+    setSt('已同步 '+new Date().toLocaleTimeString().slice(0,5));
+  }catch(e){setSt('同步失敗（資料已存在本機）：'+e.message,true)}
+}
+async function pull(){
+  if(!cfg.url){setSt('尚未設定試算表');return}
+  setSt('讀取中…');
+  try{
+    const r=await fetch(cfg.url+'?token='+encodeURIComponent(cfg.token||''));
+    const j=await r.json();if(j.error)throw new Error(j.error);
+    const rows=j.rows.filter(x=>x['編號']);
+    if(!rows.length&&data.length){
+      if(confirm('試算表目前是空的。要把這台電腦上的 '+data.length+' 筆資料上傳到試算表嗎？')){await sync({action:'upsert',records:data.map(toRec)})}
+      return;
+    }
+    data=rows.map(fromRec);save();render();setSt('已讀取 '+rows.length+' 筆 '+new Date().toLocaleTimeString().slice(0,5));
+  }catch(e){setSt('讀取失敗（使用本機資料）：'+e.message,true)}
+}
+function openCfg(){
+  $('#frm').innerHTML=`<h3 style="margin-top:0">Google 試算表設定</h3>
+   <div class="grid" style="grid-template-columns:1fr"><label>Web App 網址（以 /exec 結尾）<input name="url" value="${esc(cfg.url||'')}" placeholder="https://script.google.com/macros/s/.../exec"></label>
+   <label>密碼（與 Code.gs 裡的 TOKEN 相同）<input name="token" type="password" value="${esc(cfg.token||'')}"></label></div>
+   <p class="hint">這兩項只存在你這台瀏覽器，不會寫進 GitHub 上的檔案。連線後，試算表是主要資料來源：開啟網頁會自動讀取，儲存時自動寫回。只會讀寫 Code.gs 指定的那一個分頁。</p>
+   <div class="bar" style="justify-content:space-between;margin:0"><div><button class="b" value="off">解除連線</button></div>
+   <div class="bar" style="margin:0"><button class="b" value="x">取消</button><button class="b p" value="ok">儲存並讀取</button></div></div>`;
+  $('#dlg').showModal();
+  $('#frm').onsubmit=e=>{const v=e.submitter&&e.submitter.value;
+    if(v==='off'){cfg={};localStorage.removeItem('cfg');setSt('');return}
+    if(v!=='ok')return;
+    const f=new FormData($('#frm'));cfg={url:(f.get('url')||'').trim(),token:f.get('token')||''};
+    try{localStorage.setItem('cfg',JSON.stringify(cfg))}catch(e){}
+    pull();
+  };
+}
+
+// ---- wiring
+$('#cfg').onclick=openCfg;$('#pull').onclick=pull;
+$('#tabs').onclick=e=>{const bt=e.target.closest('button');const t=bt&&bt.dataset.t;if(!t)return;tab=t;document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b===bt));render()};
+$('#view').onclick=e=>{const r=e.target.closest('tr[data-id]');if(r)openEdit(r.dataset.id)};
+$('#add').onclick=()=>openEdit('');
+$('#imp').onclick=()=>$('#file').click();
+$('#file').onchange=e=>{if(e.target.files[0])importFile(e.target.files[0]);e.target.value=''};
+$('#exp').onclick=exportFile;
+$('#cap').value=cap||'';$('#cap').onchange=e=>{cap=+e.target.value||0;save();render()};
+$('#inclTent').onchange=render;
+render();
+if(cfg.url)pull();
+</script>
+</body>
+</html>
