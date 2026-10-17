@@ -192,11 +192,11 @@ const mark=(m,k,none)=>m.rows.every(r=>r[k])?'✓':m.rows.some(r=>r[k])?'部分'
 const runTag=x=>x?`<span class="tag ${x}">${x}</span>`:'—';
 const uni=(m,f)=>{const v=m.rows.map(f);return v.every(x=>x===v[0])};
 const fv=v=>(v===''||v==null||isNaN(v))?'—':num(v);
-const NUMHEAD=`<th class="n" title="室數＋T/C・D">預約房數</th><th class="n" title="集客房數（未填為0）＋T/C・D">集客房數</th><th class="n">預約人數</th><th class="n">集客人數</th>`;
+const NUMHEAD=`<th class="n" title="室數＋T/C・D">預約房數</th><th class="n" title="已系統登錄才計：集客房數（未填為0）＋T/C・D；未登錄顯示 0＋0">集客房數</th><th class="n">預約人數</th><th class="n">集客人數</th>`;
 function numCells(m,g,night){
   const cv=(f,fmt)=>(night||uni(m,f))?fmt(f(g)):'<span class="cont">詳細</span>';
   const rm=x=>`${x}＋${extra}`;
-  return `<td class="n">${cv(r=>N(r.rooms),rm)}</td><td class="n"><b>${cv(r=>hasLR(r)?+r.latestRooms:0,rm)}</b></td><td class="n">${cv(r=>r.people??'',fv)}</td><td class="n">${cv(r=>r.latest??'',fv)}</td>`;
+  return `<td class="n">${cv(r=>N(r.rooms),rm)}</td><td class="n"><b>${cv(r=>r.registered?`${hasLR(r)?+r.latestRooms:0}＋${extra}`:'0＋0',String)}</b></td><td class="n">${cv(r=>r.people??'',fv)}</td><td class="n">${cv(r=>r.latest??'',fv)}</td>`;
 }
 function groupRows(list,noAg){
   return list.map(({m,g,night,of})=>{const n=m.rows.length;
