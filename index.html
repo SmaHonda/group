@@ -134,12 +134,12 @@ const normFin=x=>{if(x===true||x===1||x==='1'||x==='✓'||x==='已FINAL')return 
 const isFinal=g=>{const f=normFin(g.final);return f==='FINAL'||f==='手配OK'};   // 已收到客人名單
 const finTag=x=>`<span class="tag ${x}">${x}</span>`;
 const hasCust=g=>/\d/.test(String(g.custId??''));
-const ACT=[['actSingle','單人房 間數','number','實績_單人房數'],['priceSingle','單人房 單價','number','實績_單人房單價'],
-['actTwin','雙人房 間數','number','實績_雙人房數'],['priceTwin','雙人房 單價','number','實績_雙人房單價'],
-['actTriple','三人房 間數','number','實績_三人房數'],['priceTriple','三人房 單價','number','實績_三人房單價'],
+const ACT=[['actSingle','單人房 間數','number','實績_單人房數'],['priceSingle','單人房 單價（每人）','number','實績_單人房單價'],
+['actTwin','雙人房 間數','number','實績_雙人房數'],['priceTwin','雙人房 單價（每人）','number','實績_雙人房單價'],
+['actTriple','三人房 間數','number','實績_三人房數'],['priceTriple','三人房 單價（每人）','number','實績_三人房單價'],
 ['actTC','T/C 用房數','number','實績_T/C房數'],['priceTC','T/C 單價','number','實績_T/C單價'],
 ['actD','D 用房數','number','實績_D房數'],['priceD','D 單價','number','實績_D單價'],
-['actPeople','實際入住人數','number','實績_人數'],['actSoine','添い寝人數','number','實績_添い寝人數'],['priceSoine','添い寝單價','number','實績_添い寝單價'],['actNote','實績備註','text','實績備註'],['actAt','實績更新日','date','實績更新日']];
+['actPeople','實際入住人數','number','實績_人數'],['actSoine','添い寝人數','number','實績_添い寝人數'],['priceSoine','添い寝單價','number','實績_添い寝單價'],['actOther','その他追加 數量','number','實績_その他數量'],['priceOther','その他追加 單價','number','實績_その他單價'],['otherIn','その他 計入總金額','text','實績_その他計入金額'],['actNote','實績備註','text','實績備註'],['actAt','實績更新日','date','實績更新日']];
 const ALLF=FIELDS.concat(ACT);
 const STATUS=['決定','假預約','waiting','キャンセル'];
 const normStatus=v=>{const o=String(v??'').trim(),t=o.toLowerCase();if(STATUS.includes(o))return o;if(t==='waiting'||o==='キャンセル待ち'||o==='ウェイティング')return 'waiting';if(o==='仮予約'||o==='仮')return '假預約';if(t==='cancel'||o==='ｷｬﾝｾﾙ')return 'キャンセル';return '決定'};
@@ -165,7 +165,9 @@ const tag=s=>`<span class="tag ${s}">${s||'—'}</span>`;
 // ---- 連住合併 / 每日統計
 const hasLR=g=>g.latestRooms!==''&&g.latestRooms!=null&&!isNaN(g.latestRooms);
 const baseRooms=g=>+g.rooms||0;
-const roomsOf=g=>baseRooms(g)+extra;            // 預約房數（室數＋T/C・D）
+const isFIT=g=>String(g.segment??'').normalize('NFKC').trim().toUpperCase()==='FIT';
+const extraOf=g=>isFIT(g)?0:extra;   // FIT 不另加 T/C・D
+const roomsOf=g=>baseRooms(g)+extraOf(g);            // 預約房數（室數＋T/C・D）
 const colBase=g=>hasLR(g)?+g.latestRooms:0; // 集客房數（未填視為0）
 const rmTxt=g=>roomsOf(g)+(hasLR(g)?'＊':'');
 const idKey=g=>[g.custId,g.tcId,g.dId].map(x=>String(x??'').trim()).join('|');
@@ -191,7 +193,7 @@ function occupancy(){
     const a=pd(g.cin);if(a==null)continue;const n=nightsOf(g);
     for(let i=0;i<n;i++){const k=fd(a+i*DAY);let o=mp.get(k);if(!o)mp.set(k,o=EMPTY());const e=entry(g,k);
       if(w){o.wait.push(e);continue}
-      o.rooms+=roomsOf(g);if(g.registered){o.colB+=colBase(g);o.colX+=extra}else o.unreg++;if(isFinal(g))o.fin++;o.people+=N(g.latest);o.list.push(e)}}
+      o.rooms+=roomsOf(g);if(g.registered){o.colB+=colBase(g);o.colX+=extraOf(g)}else o.unreg++;if(isFinal(g))o.fin++;o.people+=N(g.latest);o.list.push(e)}}
   return mp;
 }
 const rowAttr=(m,g)=>m.rows.length>1?`data-mg="${esc(m.key)}"`:`data-id="${esc(g.id)}"`;
@@ -203,7 +205,7 @@ const NUMHEAD=`<th class="n" title="室數＋T/C・D">預約房數</th><th class
 function numCells(m,g,night){
   const cv=(f,fmt)=>(night||uni(m,f))?fmt(f(g)):'<span class="cont">詳細</span>';
   const rm=x=>`${x}＋${extra}`;
-  return `<td class="n">${cv(r=>N(r.rooms),rm)}</td><td class="n"><b>${cv(r=>r.registered?`${hasLR(r)?+r.latestRooms:0}＋${extra}`:'0＋0',String)}</b></td><td class="n">${cv(r=>r.people??'',fv)}</td><td class="n">${cv(r=>r.latest??'',fv)}</td>`;
+  return `<td class="n">${cv(r=>`${N(r.rooms)}＋${extraOf(r)}`,String)}</td><td class="n"><b>${cv(r=>r.registered?`${hasLR(r)?+r.latestRooms:0}＋${extraOf(r)}`:'0＋0',String)}</b></td><td class="n">${cv(r=>r.people??'',fv)}</td><td class="n">${cv(r=>r.latest??'',fv)}</td>`;
 }
 function groupRows(list,noAg){
   return list.map(({m,g,night,of})=>{const n=m.rows.length;
@@ -245,7 +247,7 @@ function viewDay(d){
     <label>查詢日期<input type="date" id="qd" value="${d}"></label>
     <button class="b" data-shift="-1">‹ 前一天</button><button class="b" data-shift="1">後一天 ›</button><button class="b" data-today>今天</button></div>
     ${statsHTML(o)}
-    <div class="hint">${lab(d)} 當晚，含非當天 check-in 的連住團體。連住已合併，點有 ×N 的列可展開每一天。預約房數＝室數＋${extra}（T/C・D）；系統登錄房數＝已勾選「系統登錄」的團的集客房數（未填視為 0），每團另加 ${extra}（T/C・D），未勾選的團不計；集客人數只計「最新集客人數」有填的團。Waiting、已取消不計入。</div></div>
+    <div class="hint">${lab(d)} 當晚，含非當天 check-in 的連住團體。連住已合併，點有 ×N 的列可展開每一天。預約房數＝室數＋${extra}（T/C・D；セグメント為 FIT 的團不加）；系統登錄房數＝已勾選「系統登錄」的團的集客房數（未填視為 0），每團另加 ${extra}（T/C・D），未勾選的團不計；集客人數只計「最新集客人數」有填的團。Waiting、已取消不計入。</div></div>
     <div class="panel tw">${o.list.length?`<table>${HEAD}${groupRows(o.list)}</table>`:'<div class="empty">這天沒有住宿的團體。</div>'}
     ${ex.length?`<h3>Waiting／已取消（不計入總數）</h3><table>${HEAD}${groupRows(ex)}</table>`:''}</div>`;
   $('#qd').onchange=e=>{qDay=e.target.value;viewDay(qDay)};
@@ -352,12 +354,21 @@ function viewAll(){
 // ---- 實績
 const N=x=>(x===''||x==null||isNaN(x))?0:+x;
 const actRooms=g=>N(g.actSingle)+N(g.actTwin)+N(g.actTriple)+N(g.actTC)+N(g.actD);
-const actRev=g=>N(g.actSingle)*N(g.priceSingle)+N(g.actTwin)*N(g.priceTwin)+N(g.actTriple)*N(g.priceTriple)+N(g.actTC)*N(g.priceTC)+N(g.actD)*N(g.priceD)+N(g.actSoine)*N(g.priceSoine);
+const actRev=g=>N(g.actSingle)*1*N(g.priceSingle)+N(g.actTwin)*2*N(g.priceTwin)+N(g.actTriple)*3*N(g.priceTriple)+N(g.actTC)*N(g.priceTC)+N(g.actD)*N(g.priceD)+N(g.actSoine)*N(g.priceSoine)+((g.otherIn||'計入')!=='不計入'?N(g.actOther)*N(g.priceOther):0); // 房型單價是「每人」單價，間數×人數×單價
 const guests=o=>N(o.actSingle)+2*N(o.actTwin)+3*N(o.actTriple); // 房型換算入住人數（不含 T/C・D、添い寝）
 const ACT_DEF={actTC:1,priceTC:8000,actD:1,priceD:8000}; // 新輸入時 T/C・D 的預設
 const AUTO={priceSingle:o=>o.priceTwin===''||o.priceTwin==null?'':N(o.priceTwin)+4000,priceTriple:o=>o.priceTwin===''||o.priceTwin==null?'':N(o.priceTwin)-1000}; // 單人＝雙人＋4000、三人＝雙人−1000
 const hasAct=g=>['actSingle','actTwin','actTriple','actTC','actD'].some(k=>g[k]!==''&&g[k]!=null);
 function nightsInMonth(g,mo){const a=pd(g.cin);if(a==null)return 0;const [y,m]=mo.split('-').map(Number);const s0=Date.UTC(y,m-1,1),e0=Date.UTC(y,m,1);let c=0;for(let i=0;i<nightsOf(g);i++){const d=a+i*DAY;if(d>=s0&&d<e0)c++}return c}
+const actPpl=g=>g.actPeople!==''&&g.actPeople!=null?N(g.actPeople):guests(g);   // 實際入住人數（未輸入為0）
+const guestRooms=g=>N(g.actSingle)+N(g.actTwin)+N(g.actTriple);
+const tcdRooms=g=>N(g.actTC)+N(g.actD);
+const avgOf=rows=>{const pp=rows.reduce((a,g)=>a+nightsOf(g)*actPpl(g),0),rv=rows.reduce((a,g)=>a+nightsOf(g)*actRev(g),0);return pp?Math.round(rv/pp):null};
+const ACTHEAD=`<th class="n">預約房數</th><th class="n">實際入住房數</th><th class="n">預約人數</th><th class="n">實際入住人數</th>`;
+function actCells(x){
+  const cv=(f,fmt)=>uni(x,f)?fmt(f(x.g)):'<span class="cont">詳細</span>';
+  return `<td class="n">${cv(r=>`${N(r.rooms)}＋${extraOf(r)}`,String)}</td><td class="n"><b>${cv(r=>`${guestRooms(r)}＋${tcdRooms(r)}`,String)}</b></td><td class="n">${cv(r=>r.people??'',fv)}</td><td class="n"><b>${cv(actPpl,String)}</b></td>`;
+}
 let qActMonth=today().slice(0,7),qActTodo=false;
 function viewAct(){
   const t=today();const [y,m]=qActMonth.split('-').map(Number);const ms=qActMonth+'-01',me=fd(Date.UTC(y,m,1));
@@ -366,16 +377,17 @@ function viewAct(){
   const rows=base.flatMap(x=>x.rows);
   const done=base.filter(x=>x.rows.every(hasAct)).length;
   const rn=g=>nightsInMonth(g,qActMonth);
+  const mp=rows.reduce((a,g)=>a+rn(g)*actPpl(g),0),mr=rows.reduce((a,g)=>a+rn(g)*actRev(g),0);const monthAvg=mp?Math.round(mr/mp):null;
   $('#view').innerHTML=`<div class="panel"><div class="bar"><label>月份<input type="month" id="qam" value="${qActMonth}"></label>
     <button class="b" data-am="-1">‹ 上個月</button><button class="b" data-am="1">下個月 ›</button><button class="b" data-amnow>本月</button>
     <label style="flex-direction:row;align-items:center;gap:6px;color:var(--ink)"><input type="checkbox" id="qat" ${qActTodo?'checked':''}> 只看尚未輸入完成的</label></div>
-    <div class="stats"><div>已入住團數<b>${base.length}</b></div><div>實績輸入完成<b style="color:var(--ok)">${done}／${base.length}</b></div><div>本月實績房晚<b>${rows.reduce((a,g)=>a+rn(g)*actRooms(g),0)}</b></div><div>本月實績房租金額<b>${num(rows.reduce((a,g)=>a+rn(g)*actRev(g),0))}</b></div></div>
-    <div class="hint">已入住（入住日≤今天）且狀態為「決定」的團。點一列輸入實績；只會寫入實績欄位，不動預約資料。金額＝各房型間數×單價＋T/C・D＋添い寝人數×單價，乘上本月住宿晚數。</div></div>
-    <div class="panel tw">${items.length?`<table><tr><th>期間</th><th>団体名</th><th>旅行会社</th>${NUMHEAD}<th>實績輸入</th><th class="n">本月房晚</th><th class="n">本月金額</th></tr>
+    <div class="stats"><div>已入住團數<b>${base.length}</b></div><div>實績輸入完成<b style="color:var(--ok)">${done}／${base.length}</b></div><div>本月實績房晚<b>${rows.reduce((a,g)=>a+rn(g)*actRooms(g),0)}</b></div><div>本月實績金額<b>${num(mr)}</b></div><div>本月平均單價<b>${fv(monthAvg)}</b></div></div>
+    <div class="hint">已入住（入住日≤今天）且狀態為「決定」的團。點一列輸入實績；只會寫入實績欄位，不動預約資料。金額＝各房型間數×人數×每人單價＋T/C・D＋添い寝＋その他（預設計入），乘上本月住宿晚數；平均單價＝金額÷實際入住人數。實際入住房數＝客房數＋T/C・D，未輸入為 0。</div></div>
+    <div class="panel tw">${items.length?`<table><tr><th>期間</th><th>団体名</th><th>旅行会社</th>${ACTHEAD}<th>實績輸入</th><th class="n">平均單價</th><th class="n">本月金額</th></tr>
     ${items.map(x=>{const k=x.rows.filter(hasAct).length,n=x.rows.length;
-     return `<tr class="click" data-act="${esc(x.key)}"><td>${lab(x.cin)} → ${lab(x.cout)}</td><td>${esc(x.g.name)}${n>1?` <span class="cont">×${n}</span>`:''}</td><td>${esc(x.g.agency)}</td>${numCells(x,x.g,0)}
+     return `<tr class="click" data-act="${esc(x.key)}"><td>${lab(x.cin)} → ${lab(x.cout)}</td><td>${esc(x.g.name)}${n>1?` <span class="cont">×${n}</span>`:''}</td><td>${esc(x.g.agency)}</td>${actCells(x)}
      <td>${k===n?'<span class="tag 決定">已輸入</span>':k===0?'<span class="tag 假預約">未輸入</span>':`<span class="tag 假預約">${k}／${n}</span>`}</td>
-     <td class="n">${x.rows.reduce((a,g)=>a+rn(g)*actRooms(g),0)}</td><td class="n">${num(x.rows.reduce((a,g)=>a+rn(g)*actRev(g),0))}</td></tr>`}).join('')}</table>`:'<div class="empty">這個月沒有需要輸入的團體。</div>'}</div>`;
+     <td class="n">${fv(avgOf(x.rows))}</td><td class="n">${num(x.rows.reduce((a,g)=>a+rn(g)*actRev(g),0))}</td></tr>`}).join('')}</table>`:'<div class="empty">這個月沒有需要輸入的團體。</div>'}</div>`;
   $('#qam').onchange=e=>{if(e.target.value){qActMonth=e.target.value;viewAct()}};
   document.querySelectorAll('[data-am]').forEach(b=>b.onclick=()=>{qActMonth=fd(Date.UTC(y,m-1+ +b.dataset.am,1)).slice(0,7);viewAct()});
   document.querySelector('[data-amnow]').onclick=()=>{qActMonth=today().slice(0,7);viewAct()};
@@ -386,15 +398,16 @@ function openAct(key){
   const m=MBYKEY.get(key);if(!m)return;const rows=m.rows;
   const src=r=>Object.fromEntries(ACT.map(([k])=>[k,r[k]??'']));
   const first=rows.find(hasAct)||rows[0];
-  const init=r=>{const v=src(r);if(!hasAct(r))Object.assign(v,ACT_DEF);return v};
+  const init=r=>{const v=src(r);if(!hasAct(r)){Object.assign(v,ACT_DEF);if(isFIT(r)){v.actTC=0;v.actD=0}}return v};
   function draw(vals,scope){
     let manual=vals.actPeople!==''&&N(vals.actPeople)!==guests(vals);
     const isMan=k=>{const d=AUTO[k](vals);return vals[k]!==''&&(d===''||N(vals[k])!==d)};
     const man={priceSingle:isMan('priceSingle'),priceTriple:isMan('priceTriple')};
     $('#frm').innerHTML=`<h3 style="margin-top:0">實績輸入：${esc(m.g.name)}</h3>
-    <p class="hint">${lab(m.cin)} → ${lab(m.cout)}（${m.nights}泊）｜預約房數 ${N(m.g.rooms)}＋${extra}／集客房數 ${hasLR(m.g)?+m.g.latestRooms:0}＋${extra}・預約人數 ${num(m.g.people)||'—'}／集客人數 ${num(m.g.latest)||'—'}・1人單價 ${num(m.g.unitPerson)||'—'}。這裡只填實績，預約欄位不會被改動。數字是「每晚」的間數與單價。實際入住人數會依房型自動換算（單人房×1、雙人房×2、三人房×3，不含 T/C・D 與添い寝），旁邊顯示換算結果方便核對；手動改過則以你填的為準。新輸入時預設 T/C・D 各 1 間、單價 8000；單人房單價＝雙人房單價＋4000、三人房單價＝雙人房單價−1000，會隨雙人房單價自動計算，你手動改過的欄位就不再自動變動（清空該欄則恢復自動）。</p>
+    <p class="hint">${lab(m.cin)} → ${lab(m.cout)}（${m.nights}泊）｜預約房數 ${N(m.g.rooms)}＋${extraOf(m.g)}／集客房數 ${hasLR(m.g)?+m.g.latestRooms:0}＋${extraOf(m.g)}・預約人數 ${num(m.g.people)||'—'}／集客人數 ${num(m.g.latest)||'—'}・1人單價 ${num(m.g.unitPerson)||'—'}。這裡只填實績，預約欄位不會被改動。數字是「每晚」的間數與單價；單人／雙人／三人房的單價是「每人」單價，金額＝間數×人數×單價。實際入住人數會依房型自動換算（單人房×1、雙人房×2、三人房×3，不含 T/C・D 與添い寝），旁邊顯示換算結果方便核對；手動改過則以你填的為準。新輸入時預設 T/C・D 各 1 間、單價 8000；單人房單價＝雙人房單價＋4000、三人房單價＝雙人房單價−1000，會隨雙人房單價自動計算，你手動改過的欄位就不再自動變動（清空該欄則恢復自動）。</p>
     ${rows.length>1?`<label>套用範圍<select id="scope"><option value="all" ${scope==='all'?'selected':''}>全部 ${rows.length} 筆（同一內容）</option>${rows.map(r=>`<option value="${esc(r.id)}" ${scope===r.id?'selected':''}>只有 ${lab(r.cin)}${nightsOf(r)>1?' 起 '+nightsOf(r)+' 晚':''}</option>`).join('')}</select></label>`:''}
-    <div class="grid" style="margin-top:10px">${ACT.filter(a=>a[2]==='number').map(([k,l])=>`<label>${l}${k==='actPeople'?' <span id="cp" class="cont"></span>':''}${k==='actSoine'?' <span class="hint">（不計入實際入住人數）</span>':''}<input name="${k}" type="number" step="any" min="0" value="${esc(vals[k]??'')}"></label>`).join('')}
+    <div class="grid" style="margin-top:10px">${ACT.filter(a=>a[2]==='number').map(([k,l])=>`<label>${l}${k==='actPeople'?' <span id="cp" class="cont"></span>':''}${k==='actSoine'?' <span class="hint">（不計入實際入住人數）</span>':''}${k==='actOther'?' <span class="hint">（不計入人數、房數）</span>':''}<input name="${k}" type="number" step="any" min="0" value="${esc(vals[k]??'')}"></label>`).join('')}
+    <label>その他 是否計入總金額<select name="otherIn"><option ${(vals.otherIn||'計入')==='計入'?'selected':''}>計入</option><option ${vals.otherIn==='不計入'?'selected':''}>不計入</option></select></label>
     <label class="w2">實績備註<input name="actNote" value="${esc(vals.actNote??'')}"></label></div>
     <p id="pv" class="hint" style="margin-top:10px"></p>
     <div class="bar" style="justify-content:flex-end;margin:0"><button type="button" class="b" id="ax">取消</button><button class="b p">儲存</button></div>`;
@@ -403,7 +416,8 @@ function openAct(key){
       ['priceSingle','priceTriple'].forEach(k=>{if(!man[k]){const d=AUTO[k](o);document.querySelector(`#frm [name=${k}]`).value=d;o[k]=d}});const gp=guests(o);
       if(!manual)inp.value=gp>0?gp:'';const cur=inp.value===''?0:+inp.value;
       $('#cp').textContent=`房型換算 ${gp} 人${gp&&cur!==gp?' ⚠與輸入不同':gp?' ✓':''}`;
-      $('#pv').textContent=`每晚合計：${actRooms(o)} 間（含 T/C・D）／房型換算人數 ${gp}（單1・雙2・三3；添い寝 ${N(o.actSoine)} 人不計入）／房租金額 ${num(actRev(o))}`};
+      const rv=actRev(o),pc=cur||gp;
+      $('#pv').textContent=`每晚合計：${actRooms(o)} 間（含 T/C・D）／房型換算人數 ${gp}（單1・雙2・三3；添い寝、その他不計入人數）／金額 ${num(rv)}（房型單價×人數）／平均單價 ${pc?num(Math.round(rv/pc)):'—'}`};
     inp.oninput=()=>{manual=inp.value!==''};
     ['priceSingle','priceTriple'].forEach(k=>{const el=document.querySelector(`#frm [name=${k}]`);el.oninput=()=>{man[k]=el.value!==''}});
     $('#frm').oninput=pv;pv();
