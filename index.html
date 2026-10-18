@@ -354,6 +354,8 @@ const N=x=>(x===''||x==null||isNaN(x))?0:+x;
 const actRooms=g=>N(g.actSingle)+N(g.actTwin)+N(g.actTriple)+N(g.actTC)+N(g.actD);
 const actRev=g=>N(g.actSingle)*N(g.priceSingle)+N(g.actTwin)*N(g.priceTwin)+N(g.actTriple)*N(g.priceTriple)+N(g.actTC)*N(g.priceTC)+N(g.actD)*N(g.priceD)+N(g.actSoine)*N(g.priceSoine);
 const guests=o=>N(o.actSingle)+2*N(o.actTwin)+3*N(o.actTriple); // 房型換算入住人數（不含 T/C・D、添い寝）
+const ACT_DEF={actTC:1,priceTC:8000,actD:1,priceD:8000}; // 新輸入時 T/C・D 的預設
+const AUTO={priceSingle:o=>o.priceTwin===''||o.priceTwin==null?'':N(o.priceTwin)+4000,priceTriple:o=>o.priceTwin===''||o.priceTwin==null?'':N(o.priceTwin)-1000}; // 單人＝雙人＋4000、三人＝雙人−1000
 const hasAct=g=>['actSingle','actTwin','actTriple','actTC','actD'].some(k=>g[k]!==''&&g[k]!=null);
 function nightsInMonth(g,mo){const a=pd(g.cin);if(a==null)return 0;const [y,m]=mo.split('-').map(Number);const s0=Date.UTC(y,m-1,1),e0=Date.UTC(y,m,1);let c=0;for(let i=0;i<nightsOf(g);i++){const d=a+i*DAY;if(d>=s0&&d<e0)c++}return c}
 let qActMonth=today().slice(0,7),qActTodo=false;
@@ -384,24 +386,29 @@ function openAct(key){
   const m=MBYKEY.get(key);if(!m)return;const rows=m.rows;
   const src=r=>Object.fromEntries(ACT.map(([k])=>[k,r[k]??'']));
   const first=rows.find(hasAct)||rows[0];
+  const init=r=>{const v=src(r);if(!hasAct(r))Object.assign(v,ACT_DEF);return v};
   function draw(vals,scope){
     let manual=vals.actPeople!==''&&N(vals.actPeople)!==guests(vals);
+    const isMan=k=>{const d=AUTO[k](vals);return vals[k]!==''&&(d===''||N(vals[k])!==d)};
+    const man={priceSingle:isMan('priceSingle'),priceTriple:isMan('priceTriple')};
     $('#frm').innerHTML=`<h3 style="margin-top:0">實績輸入：${esc(m.g.name)}</h3>
-    <p class="hint">${lab(m.cin)} → ${lab(m.cout)}（${m.nights}泊）｜預約房數 ${N(m.g.rooms)}＋${extra}／集客房數 ${hasLR(m.g)?+m.g.latestRooms:0}＋${extra}・預約人數 ${num(m.g.people)||'—'}／集客人數 ${num(m.g.latest)||'—'}・1人單價 ${num(m.g.unitPerson)||'—'}。這裡只填實績，預約欄位不會被改動。數字是「每晚」的間數與單價。實際入住人數會依房型自動換算（單人房×1、雙人房×2、三人房×3，不含 T/C・D 與添い寝），旁邊顯示換算結果方便核對；手動改過則以你填的為準。</p>
+    <p class="hint">${lab(m.cin)} → ${lab(m.cout)}（${m.nights}泊）｜預約房數 ${N(m.g.rooms)}＋${extra}／集客房數 ${hasLR(m.g)?+m.g.latestRooms:0}＋${extra}・預約人數 ${num(m.g.people)||'—'}／集客人數 ${num(m.g.latest)||'—'}・1人單價 ${num(m.g.unitPerson)||'—'}。這裡只填實績，預約欄位不會被改動。數字是「每晚」的間數與單價。實際入住人數會依房型自動換算（單人房×1、雙人房×2、三人房×3，不含 T/C・D 與添い寝），旁邊顯示換算結果方便核對；手動改過則以你填的為準。新輸入時預設 T/C・D 各 1 間、單價 8000；單人房單價＝雙人房單價＋4000、三人房單價＝雙人房單價−1000，會隨雙人房單價自動計算，你手動改過的欄位就不再自動變動（清空該欄則恢復自動）。</p>
     ${rows.length>1?`<label>套用範圍<select id="scope"><option value="all" ${scope==='all'?'selected':''}>全部 ${rows.length} 筆（同一內容）</option>${rows.map(r=>`<option value="${esc(r.id)}" ${scope===r.id?'selected':''}>只有 ${lab(r.cin)}${nightsOf(r)>1?' 起 '+nightsOf(r)+' 晚':''}</option>`).join('')}</select></label>`:''}
     <div class="grid" style="margin-top:10px">${ACT.filter(a=>a[2]==='number').map(([k,l])=>`<label>${l}${k==='actPeople'?' <span id="cp" class="cont"></span>':''}${k==='actSoine'?' <span class="hint">（不計入實際入住人數）</span>':''}<input name="${k}" type="number" step="any" min="0" value="${esc(vals[k]??'')}"></label>`).join('')}
     <label class="w2">實績備註<input name="actNote" value="${esc(vals.actNote??'')}"></label></div>
     <p id="pv" class="hint" style="margin-top:10px"></p>
     <div class="bar" style="justify-content:flex-end;margin:0"><button type="button" class="b" id="ax">取消</button><button class="b p">儲存</button></div>`;
     const inp=document.querySelector('#frm [name=actPeople]');
-    const pv=()=>{const fm=new FormData($('#frm'));const o={};ACT.forEach(([k])=>o[k]=fm.get(k)??'');const gp=guests(o);
+    const pv=()=>{const fm=new FormData($('#frm'));const o={};ACT.forEach(([k])=>o[k]=fm.get(k)??'');
+      ['priceSingle','priceTriple'].forEach(k=>{if(!man[k]){const d=AUTO[k](o);document.querySelector(`#frm [name=${k}]`).value=d;o[k]=d}});const gp=guests(o);
       if(!manual)inp.value=gp>0?gp:'';const cur=inp.value===''?0:+inp.value;
       $('#cp').textContent=`房型換算 ${gp} 人${gp&&cur!==gp?' ⚠與輸入不同':gp?' ✓':''}`;
       $('#pv').textContent=`每晚合計：${actRooms(o)} 間（含 T/C・D）／房型換算人數 ${gp}（單1・雙2・三3；添い寝 ${N(o.actSoine)} 人不計入）／房租金額 ${num(actRev(o))}`};
     inp.oninput=()=>{manual=inp.value!==''};
+    ['priceSingle','priceTriple'].forEach(k=>{const el=document.querySelector(`#frm [name=${k}]`);el.oninput=()=>{man[k]=el.value!==''}});
     $('#frm').oninput=pv;pv();
     $('#ax').onclick=()=>$('#dlg').close();
-    if($('#scope'))$('#scope').onchange=e=>{const sc=e.target.value;draw(src(sc==='all'?first:rows.find(x=>x.id===sc)),sc)};
+    if($('#scope'))$('#scope').onchange=e=>{const sc=e.target.value;draw(init(sc==='all'?first:rows.find(x=>x.id===sc)),sc)};
     $('#frm').onsubmit=e=>{
       e.preventDefault();const fm=new FormData($('#frm'));const v={};
       ACT.forEach(([k,,t])=>{if(t==='date')return;let x=fm.get(k)??'';if(t==='number'&&x!=='')x=+x;v[k]=x});
@@ -415,7 +422,7 @@ function openAct(key){
     };
   }
   if(!$('#dlg').open)$('#dlg').showModal();
-  draw(src(first),'all');
+  draw(init(first),'all');
 }
 const TITLE={home:'首頁',day:'日期查詢',cal:'月曆',rooms:'房數查詢',agency:'旅行社查詢',act:'實績輸入',all:'全部團體'};
 function render(){
