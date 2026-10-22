@@ -529,7 +529,10 @@ const b2s=ab=>{let s='';const u=new Uint8Array(ab);for(let i=0;i<u.length;i+=819
 const s2b=b=>Uint8Array.from(atob(b),c=>c.charCodeAt(0)).buffer;
 let TPL=null,TPLNAME='';
 let qRptMonth=(()=>{const d=new Date();return fd(Date.UTC(d.getFullYear(),d.getMonth()-1,1)).slice(0,7)})();
+function monthStats(){const mp=new Map();data.forEach(g=>{const a=pd(g.cin);if(a==null)return;for(let i=0;i<nightsOf(g);i++){const k=fd(a+i*DAY).slice(0,7);let o=mp.get(k);if(!o)mp.set(k,o={dec:0,act:0,canc:0,tent:0});if(g.status==='決定'){o.dec++;if(hasAct(g))o.act++}else if(g.status==='キャンセル')o.canc++;else o.tent++}});return mp}
+let rptInit=false;
 function viewReport(){
+  if(!rptInit){rptInit=true;const ms=[...monthStats()].filter(([k,o])=>o.act>0).map(e=>e[0]).sort();if(ms.length)qRptMonth=ms[ms.length-1]}
   if(!TPL){try{const b=localStorage.getItem('tpl');if(b){TPL=s2b(b);TPLNAME=localStorage.getItem('tplName')||'（已儲存的範本）'}}catch(e){}}
   const R=reportRecs(qRptMonth),w=R.warn;const n1=R.recs.filter(x=>x.status==='決定').length,n2=R.recs.length-n1;
   $('#view').innerHTML=`<div class="panel"><div class="bar"><label>報表月份<input type="month" id="rm" value="${qRptMonth}"></label>
@@ -539,7 +542,11 @@ function viewReport(){
     <div class="hint">${w.noAct?`⚠ 有 ${w.noAct} 列「決定」還沒輸入實績，月報裡會是 0。<br>`:''}${w.tent?`已排除 ${w.tent} 列假預約／waiting（月報只含決定與キャンセル）。<br>`:''}${w.seg?`⚠ 有 ${w.seg} 列的セグメント不是 TS／AGT／TO／OTA／INB（例如 FIT 或空白），這些列在「団体予約リスト」裡，但不會算進「総まとめ」的合計。<br>`:''}
     旅行社列（案內所）：日本国內 ${R.domestic.length} 間、インバウンド ${R.inb.length} 間，會自動依本月資料產生。</div>
     <div class="bar" style="margin:14px 0 0"><button class="b p" id="gen" ${TPL&&R.recs.length?'':'disabled'}>產生月報並下載</button></div></div>
+    <div class="panel tw"><h3 style="margin-top:0">各月份的資料狀況（點一列切換月份）</h3><table><tr><th>月份</th><th class="n">決定（列）</th><th class="n">已輸入實績</th><th class="n">未輸入實績</th><th class="n">キャンセル</th><th class="n">假預約／waiting（不匯出）</th></tr>
+    ${[...monthStats()].sort().reverse().map(([k,o])=>`<tr class="click" data-rmo="${k}" style="${k===qRptMonth?'background:var(--hl)':''}"><td><b>${k}</b></td><td class="n">${o.dec}</td><td class="n" style="color:var(--ok)">${o.act}</td><td class="n" style="color:${o.dec-o.act?'var(--bad)':'inherit'}">${o.dec-o.act}</td><td class="n">${o.canc}</td><td class="n">${o.tent}</td></tr>`).join('')}</table>
+    <div class="hint" style="margin-top:8px">這裡的「列」是 1 晚 1 列，跟實績頁的「團」（連住合併）算法不同，所以數字不會一樣。報表只會帶出你選的月份當月住宿的那些晚。</div></div>
     <div class="panel hint">報表的「合計宿泊料金」依範本的算法：客房（每人單價×人數）＋T/C・D＋添い寝，<b>不含「その他追加」</b>（範本的計算方法註明不含追加料金）。其他追加會寫在「その他追加」欄，但不算進合計。</div>`;
+  document.querySelectorAll('[data-rmo]').forEach(r=>r.onclick=()=>{qRptMonth=r.dataset.rmo;viewReport()});
   $('#rm').onchange=e=>{if(e.target.value){qRptMonth=e.target.value;viewReport()}};
   $('#tplf').onchange=async e=>{const f=e.target.files[0];if(!f)return;const ab=await f.arrayBuffer();TPL=ab;TPLNAME=f.name;try{localStorage.setItem('tpl',b2s(ab));localStorage.setItem('tplName',f.name)}catch(er){alert('範本太大，無法存在瀏覽器；這次可用，下次要重新選。')}viewReport()};
   $('#gen').onclick=async()=>{const bt=$('#gen');bt.disabled=true;bt.textContent='產生中…';
