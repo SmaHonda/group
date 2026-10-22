@@ -18,7 +18,7 @@ body{margin:0;display:grid;grid-template-columns:104px 1fr;min-height:100vh;colo
 #tabs button{border:0;background:none;color:var(--sub);font:inherit;font-size:13px;font-weight:500;cursor:pointer;padding:8px 2px;border-radius:12px;display:flex;flex-direction:column;align-items:center;gap:0}
 #tabs button i{font-style:normal;font-size:22px;line-height:1.2}
 #tabs button.on{color:var(--ink);background:var(--hl);font-weight:700}
-#wrap{min-width:0;padding:14px 26px 50px;max-width:1360px;width:100%}
+#wrap{min-width:0;padding:14px 26px 50px;width:100%}
 #top{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;align-items:center}
 #top label{flex-direction:row;align-items:center;gap:6px;font-size:13px;color:var(--ink)}
 #st{font-size:12px;color:var(--sub);margin-right:auto}
@@ -84,6 +84,8 @@ h3.big{margin:0 0 6px;font-size:26px;font-weight:900}
 .集客中{color:var(--warn)}.催行{color:var(--ok)}
 .chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:10px}.chip{font:inherit;font-size:12.5px;font-weight:700;border:2px solid var(--bd);background:var(--panel);color:var(--ink);padding:0 10px;border-radius:14px;cursor:pointer}.chip.on{background:var(--acc)}
 .未{color:var(--sub)}.手仕舞い{color:var(--warn)}.FINAL{color:var(--accd)}.手配OK{color:var(--ok)}
+tr.last td{background:var(--ink)!important;color:var(--bg)}tr.last td *{color:inherit!important;border-color:currentColor!important;background:transparent!important}
+.cal .c.today{outline:3px solid var(--or);outline-offset:-3px;background:var(--hl)}.cal .c.today .d{color:var(--ink);font-weight:900}.cal .c.today .d b{color:var(--or);margin-left:4px}
 </style>
 </head>
 <body>
@@ -257,12 +259,23 @@ function viewDay(d){
   document.querySelectorAll('[data-shift]').forEach(b=>b.onclick=()=>{qDay=fd(pd(qDay)+b.dataset.shift*DAY);viewDay(qDay)});
   document.querySelector('[data-today]').onclick=()=>{qDay=today();viewDay(qDay)};
 }
+function riskBlock(occ){
+  const t0=pd(today());const end=new Date(t0);end.setUTCMonth(end.getUTCMonth()+6);
+  const risky=[...occ.entries()].filter(([k,v])=>v.rooms>=homeMin&&pd(k)>=t0&&pd(k)<=end.getTime()).sort();
+  return `<div class="panel"><div class="bar" style="margin-bottom:6px"><h3 style="margin:0 auto 0 0">半年內房數達標的日期（${lab(today())} 起至 ${fd(end.getTime())}）</h3>
+    <label>房數達到<input type="number" id="hm" value="${homeMin}" style="width:80px"></label></div>
+    ${risky.length?`<div class="stats"><div>符合天數<b class="risk">${risky.length}</b></div><div>最高房數<b>${Math.max(...risky.map(r=>r[1].rooms))}</b></div></div>
+    <div class="tw"><table><tr><th>日期</th><th class="n">預約房數</th><th class="n">系統登錄房數</th><th class="n">集客人數</th><th class="n">團數</th>${cap?'<th class="n">剩餘</th>':''}<th>團體</th></tr>
+    ${risky.map(([k,v])=>`<tr class="click" data-goday="${k}"><td>${lab(k)} ${k.slice(0,4)}</td><td class="n"><b>${v.rooms}</b></td><td class="n" style="color:var(--ok)">${v.colB}＋${v.colX}</td><td class="n">${v.people}</td><td class="n">${v.list.length}</td>${cap?`<td class="n" style="color:${cap-v.rooms<=0?'var(--bad)':'inherit'}">${cap-v.rooms}</td>`:''}<td class="hint">${esc(v.list.map(x=>x.g.name).join('、')).slice(0,60)}</td></tr>`).join('')}</table></div>`
+    :`<div class="empty">半年內沒有房數達 ${homeMin} 的日子。${data.length?'':'還沒有資料，請先新增或匯入。'}</div>`}
+    <div class="hint">點日期看當天明細。${$('#inclTent').checked?'已計入假預約。':'僅計決定。'}Waiting 與取消不計入。</div></div>`;
+}
 function viewRooms(){
   const occ=occupancy();
   const rows=[...occ.entries()].filter(([k,v])=>v.rooms>=qMin&&k>=qFrom).sort();
   if(!rows.find(r=>r[0]===qOpen))qOpen=rows.length?rows[0][0]:null;
   const sel=qOpen&&occ.get(qOpen);
-  $('#view').innerHTML=`<div class="panel"><div class="bar" style="margin:0">
+  $('#view').innerHTML=riskBlock(occ)+`<div class="panel"><div class="bar" style="margin:0">
     <label>房數達到<input type="number" id="qm" value="${qMin}" style="width:90px"></label>
     <label>起始日<input type="date" id="qf" value="${qFrom}"></label>
     <span class="hint">符合 ${rows.length} 天，點左邊的日期看右邊的團體明細。</span></div></div>
@@ -270,6 +283,8 @@ function viewRooms(){
     <div class="meter"><i style="width:${v.rooms?Math.min(100,(v.colB+v.colX)/v.rooms*100):0}%"></i></div></div>`).join('')||'<div class="empty">沒有符合條件的日期，試著調低房數。</div>'}</div>
     ${sel?`<div class="mr"><h3 class="big">${lab(qOpen)} ${qOpen.slice(0,4)}</h3>${statsHTML(sel)}
     <div class="tw"><table>${HEAD}${groupRows(sel.list)}</table></div></div>`:''}</div>`;
+  $('#hm').onchange=e=>{homeMin=+e.target.value||0;viewRooms()};
+  document.querySelectorAll('[data-goday]').forEach(x=>x.onclick=()=>goDay(x.dataset.goday));
   $('#qm').onchange=e=>{qMin=+e.target.value||0;viewRooms()};
   $('#qf').onchange=e=>{qFrom=e.target.value||'0000-01-01';viewRooms()};
   document.querySelectorAll('[data-open]').forEach(r=>r.onclick=()=>{qOpen=r.dataset.open;viewRooms()});
@@ -282,19 +297,12 @@ function viewHome(){
   const week=[];for(let i=0;i<7;i++)week.push(fd(t0+i*DAY));
   const wrow=e=>`<tr class="click" style="${e.g.status==='waiting'?'opacity:.6':''}" ${rowAttr(e.m,e.g)}><td>${esc(e.g.name)}${e.m.rows.length>1?` <span class="cont">×${e.m.rows.length}</span>`:''}</td><td>${esc(e.g.agency)}</td><td>${tag(e.g.status)}</td><td>${runTag(e.g.run)}</td>
     <td>${e.of>1?`<span class="cont">第${e.night}晚／共${e.of}晚</span>`:'一泊'}</td>${numCells(e.m,e.g,e.night)}<td>${mark(e.m,'registered','未登錄')}</td><td>${finTag(normFin(e.g.final))}</td></tr>`;
-  $('#view').innerHTML=`<div class="panel"><div class="bar" style="margin-bottom:6px"><h3 style="margin:0 auto 0 0">半年內房數達標的日期（${lab(today())} 起至 ${fd(end.getTime())}）</h3>
-    <label>房數達到<input type="number" id="hm" value="${homeMin}" style="width:80px"></label></div>
-    ${risky.length?`<div class="stats"><div>符合天數<b class="risk">${risky.length}</b></div><div>最高房數<b>${Math.max(...risky.map(r=>r[1].rooms))}</b></div></div>
-    <div class="tw"><table><tr><th>日期</th><th class="n">預約房數</th><th class="n">系統登錄房數</th><th class="n">集客人數</th><th class="n">團數</th>${cap?'<th class="n">剩餘</th>':''}<th>團體</th></tr>
-    ${risky.map(([k,v])=>`<tr class="click" data-goday="${k}"><td>${lab(k)} ${k.slice(0,4)}</td><td class="n"><b>${v.rooms}</b></td><td class="n" style="color:var(--ok)">${v.colB}＋${v.colX}</td><td class="n">${v.people}</td><td class="n">${v.list.length}</td>${cap?`<td class="n" style="color:${cap-v.rooms<=0?'var(--bad)':'inherit'}">${cap-v.rooms}</td>`:''}<td class="hint">${esc(v.list.map(x=>x.g.name).join('、')).slice(0,60)}</td></tr>`).join('')}</table></div>`
-    :`<div class="empty">半年內沒有房數達 ${homeMin} 的日子。${data.length?'':'還沒有資料，請先新增或匯入。'}</div>`}
-    <div class="hint">點日期看當天明細。${$('#inclTent').checked?'已計入假預約。':'僅計決定。'}Waiting 與取消不計入。</div></div>
+  $('#view').innerHTML=`
   <h3>接下來一週</h3>`+week.map(k=>{const o=occ.get(k)||EMPTY();
     return `<div class="panel"><div class="bar" style="margin-bottom:6px;align-items:baseline"><h3 style="margin:0;cursor:pointer" data-goday="${k}">${lab(k)} ${k===today()?'（今天）':''}</h3>
     <span class="hint">${o.list.length} 團／預約 ${o.rooms} 間（已登錄 ${o.colB}＋${o.colX}）／集客 ${o.people} 人${cap?`／剩餘 ${cap-o.rooms} 間`:''}</span></div>
     <div class="meter"><i style="width:${o.rooms?Math.min(100,(o.colB+o.colX)/o.rooms*100):0}%"></i></div>
     ${o.list.length||o.wait.length?`<div class="tw"><table><tr><th>団体名</th><th>旅行会社</th><th>狀態</th><th>催行</th><th>住宿</th>${NUMHEAD}<th>系統登錄</th><th>FINAL</th></tr>${o.list.map(wrow).join('')}${o.wait.map(wrow).join('')}</table></div>`:'<div class="hint">沒有團體住宿。</div>'}</div>`}).join('');
-  $('#hm').onchange=e=>{homeMin=+e.target.value||0;viewHome()};
   document.querySelectorAll('[data-goday]').forEach(x=>x.onclick=()=>goDay(x.dataset.goday));
 }
 function viewCal(){
@@ -304,8 +312,8 @@ function viewCal(){
   const base=cap||max||1;let cells='';
   for(let i=0;i<lead;i++)cells+='<div></div>';
   for(let i=0;i<days;i++){const k=fd(first+i*DAY),o=occ.get(k),r=o?o.rooms:0;
-    cells+=`<div class="c ${cap&&r>=cap?'risk':''}" data-day="${k}"><div class="bg" style="opacity:${Math.min(r/base,1)*0.45}"></div>
-    <div class="d">${i+1}</div>${o&&(o.list.length)?`<div class="r">${r}</div><div class="p">系統登錄 ${o.colB}＋${o.colX}・集客 ${o.people}人</div><div class="meter"><i style="width:${r?Math.min(100,(o.colB+o.colX)/r*100):0}%"></i></div>`:''}</div>`}
+    cells+=`<div class="c ${cap&&r>=cap?'risk':''} ${k===today()?'today':''}" data-day="${k}"><div class="bg" style="opacity:${Math.min(r/base,1)*0.45}"></div>
+    <div class="d">${i+1}${k===today()?'<b>今天</b>':''}</div>${o&&(o.list.length)?`<div class="r">${r}</div><div class="p">系統登錄 ${o.colB}＋${o.colX}・集客 ${o.people}人</div><div class="meter"><i style="width:${r?Math.min(100,(o.colB+o.colX)/r*100):0}%"></i></div>`:''}</div>`}
   $('#view').innerHTML=`<div class="panel"><div class="bar"><label>月份<input type="month" id="qmo" value="${qMonth}"></label>
    <button class="b" data-mo="-1">‹ 上個月</button><button class="b" data-mo="1">下個月 ›</button><button class="b" data-thism>本月</button>
    <span class="hint">大數字＝預約房數；「系統登錄」＝已勾選系統登錄的團的集客房數＋T/C・D；「集客」＝集客人數；綠條＝系統登錄房數占預約房數的比例。顏色越深越接近${cap?'總房數':'本月最高'}${cap?'，紅框＝已達總房數':''}。點日期看明細。</span></div>
@@ -363,39 +371,66 @@ const ACT_DEF={actTC:1,priceTC:8000,actD:1,priceD:8000}; // 新輸入時 T/C・D
 const AUTO={priceSingle:o=>o.priceTwin===''||o.priceTwin==null?'':N(o.priceTwin)+4000,priceTriple:o=>o.priceTwin===''||o.priceTwin==null?'':N(o.priceTwin)-1000}; // 單人＝雙人＋4000、三人＝雙人−1000
 const hasAct=g=>['actSingle','actTwin','actTriple','actTC','actD'].some(k=>g[k]!==''&&g[k]!=null);
 function nightsInMonth(g,mo){const a=pd(g.cin);if(a==null)return 0;const [y,m]=mo.split('-').map(Number);const s0=Date.UTC(y,m-1,1),e0=Date.UTC(y,m,1);let c=0;for(let i=0;i<nightsOf(g);i++){const d=a+i*DAY;if(d>=s0&&d<e0)c++}return c}
-const actPpl=g=>g.actPeople!==''&&g.actPeople!=null?N(g.actPeople):guests(g);   // 實際入住人數（未輸入為0）
+const actPpl=g=>g.actPeople!==''&&g.actPeople!=null?N(g.actPeople):guests(g);   // 實際人數（未輸入為0）
 const guestRooms=g=>N(g.actSingle)+N(g.actTwin)+N(g.actTriple);
 const tcdRooms=g=>N(g.actTC)+N(g.actD);
-const avgOf=rows=>{const pp=rows.reduce((a,g)=>a+nightsOf(g)*actPpl(g),0),rv=rows.reduce((a,g)=>a+nightsOf(g)*actRev(g),0);return pp?Math.round(rv/pp):null};
-const ACTHEAD=`<th class="n">預約房數</th><th class="n">實際入住房數</th><th class="n">預約人數</th><th class="n">實際入住人數</th>`;
-function actCells(x){
-  const cv=(f,fmt)=>uni(x,f)?fmt(f(x.g)):'<span class="cont">詳細</span>';
+const ACTHEAD=`<th class="n">預約房數</th><th class="n">實際室數</th><th class="n">預約人數</th><th class="n">實際人數</th>`;
+function actCells(x,dr){
+  const cv=(f,fmt)=>(dr||uni(x,f))?fmt(f(dr||x.g)):'<span class="cont">詳細</span>';
   return `<td class="n">${cv(r=>rmFmt(N(r.rooms),extraOf(r)),String)}</td><td class="n"><b>${cv(actRooms,String)}</b></td><td class="n">${cv(r=>r.people??'',fv)}</td><td class="n"><b>${cv(actPpl,String)}</b></td>`;
 }
-let qActMonth=today().slice(0,7),qActTodo=false;
+let qActMonth=today().slice(0,7),qActTodo=false,qActMode='month',qActDay=today(),qActSeg='',lastActKey=null;
+const segOf=g=>String(g.segment??'').normalize('NFKC').trim().toUpperCase();
 function viewAct(){
   const t=today();const [y,m]=qActMonth.split('-').map(Number);const ms=qActMonth+'-01',me=fd(Date.UTC(y,m,1));
-  const base=MITEMS.filter(x=>x.g.status==='決定'&&x.cin&&x.cin<=t&&x.cin<me&&x.cout>ms).sort(byCin);
-  const items=base.filter(x=>!qActTodo||!x.rows.every(hasAct));
+  const day=qActMode==='day';
+  const rn=g=>day?(stays(g,qActDay)?1:0):nightsInMonth(g,qActMonth);
+  const dayRow=x=>day?x.rows.find(g=>stays(g,qActDay)):null;
+  const rowsIn=x=>day?[dayRow(x)]:x.rows;
+  const pool=MITEMS.filter(x=>x.g.status==='決定'&&x.cin&&x.cin<=t);
+  const segs=[...new Set(pool.map(x=>segOf(x.g)).filter(Boolean))].sort();
+  const base=pool.filter(x=>(day?x.rows.some(g=>stays(g,qActDay)):(x.cin<me&&x.cout>ms))&&(!qActSeg||segOf(x.g)===qActSeg)).sort(byCin);
+  const items=base.filter(x=>!qActTodo||!rowsIn(x).every(hasAct));
   const rows=base.flatMap(x=>x.rows);
-  const done=base.filter(x=>x.rows.every(hasAct)).length;
-  const rn=g=>nightsInMonth(g,qActMonth);
-  const mp=rows.reduce((a,g)=>a+rn(g)*actPpl(g),0),mr=rows.reduce((a,g)=>a+rn(g)*actRev(g),0);const monthAvg=mp?Math.round(mr/mp):null;
-  $('#view').innerHTML=`<div class="panel"><div class="bar"><label>月份<input type="month" id="qam" value="${qActMonth}"></label>
-    <button class="b" data-am="-1">‹ 上個月</button><button class="b" data-am="1">下個月 ›</button><button class="b" data-amnow>本月</button>
+  const done=base.filter(x=>rowsIn(x).every(hasAct)).length;
+  const per=day?'當日':'本月';
+  const rmN=rows.reduce((a,g)=>a+rn(g)*actRooms(g),0),rv=rows.reduce((a,g)=>a+rn(g)*actRev(g),0);
+  $('#view').innerHTML=`<div class="panel"><div class="bar">
+    <label>檢視單位<select id="qau"><option value="month" ${day?'':'selected'}>整個月</option><option value="day" ${day?'selected':''}>單日</option></select></label>
+    ${day?`<label>日期<input type="date" id="qad" value="${qActDay}"></label><button class="b" data-ad="-1">‹ 前一天</button><button class="b" data-ad="1">後一天 ›</button><button class="b" data-adnow>今天</button>`
+    :`<label>月份<input type="month" id="qam" value="${qActMonth}"></label><button class="b" data-am="-1">‹ 上個月</button><button class="b" data-am="1">下個月 ›</button><button class="b" data-amnow>本月</button>`}
+    <label>セグメント<select id="qas2"><option value="">全部</option>${segs.map(x=>`<option ${qActSeg===x?'selected':''}>${esc(x)}</option>`).join('')}</select></label>
     <label style="flex-direction:row;align-items:center;gap:6px;color:var(--ink)"><input type="checkbox" id="qat" ${qActTodo?'checked':''}> 只看尚未輸入完成的</label></div>
-    <div class="stats"><div>已入住團數<b>${base.length}</b></div><div>實績輸入完成<b style="color:var(--ok)">${done}／${base.length}</b></div><div>本月實績房晚<b>${rows.reduce((a,g)=>a+rn(g)*actRooms(g),0)}</b></div><div>本月實績金額<b>${num(mr)}</b></div><div>本月平均單價<b>${fv(monthAvg)}</b></div></div>
-    <div class="hint">已入住（入住日≤今天）且狀態為「決定」的團。點一列輸入實績；只會寫入實績欄位，不動預約資料。金額＝各房型間數×人數×每人單價＋T/C・D＋添い寝＋その他（預設計入），乘上本月住宿晚數；實際入住房數、實際入住人數都是整團（客人＋T/C・D，人數不含添い寝），未輸入為 0；平均單價＝總金額÷整團人數。</div></div>
-    <div class="panel tw">${items.length?`<table><tr><th>期間</th><th>団体名</th><th>旅行会社</th>${ACTHEAD}<th>實績輸入</th><th class="n">平均單價</th><th class="n">本月金額</th></tr>
-    ${items.map(x=>{const k=x.rows.filter(hasAct).length,n=x.rows.length;
-     return `<tr class="click" data-act="${esc(x.key)}"><td>${lab(x.cin)} → ${lab(x.cout)}</td><td>${esc(x.g.name)}${n>1?` <span class="cont">×${n}</span>`:''}</td><td>${esc(x.g.agency)}</td>${actCells(x)}
+    <div class="stats"><div>已入住團數<b>${base.length}</b></div><div>實績輸入完成<b style="color:var(--ok)">${done}／${base.length}</b></div><div>${per}實績房晚<b>${rmN}</b></div><div>${per}實績金額<b>${num(rv)}</b></div><div>${per}平均室單價<b>${rmN?num(Math.round(rv/rmN)):'—'}</b></div></div>
+    <div class="hint">已入住（入住日≤今天）且狀態為「決定」的團。點一列輸入實績；只寫入實績欄位，不動預約資料。金額＝各房型間數×人數×每人單價＋T/C・D＋添い寝＋その他（預設計入）；平均單價＝金額÷實際室數（每間房）。實際室數、實際人數都是整團（客人＋T/C・D，人數不含添い寝），未輸入為 0。上一次處理的那一列會反色，點下一列後解除。</div></div>
+    <div class="panel tw">${items.length?`<table><tr><th>期間</th><th>団体名</th><th>旅行会社</th><th>セグメント</th>${ACTHEAD}<th>實績輸入</th><th class="n">平均單價</th><th class="n">金額</th></tr>
+    ${items.map(x=>{const rr=rowsIn(x),k=rr.filter(hasAct).length,n=rr.length,dr=dayRow(x);
+     const it=x.rows.reduce((a,g)=>a+rn(g)*actRev(g),0),rmm=x.rows.reduce((a,g)=>a+rn(g)*actRooms(g),0);
+     return `<tr class="click${x.key===lastActKey?' last':''}" data-act="${esc(x.key)}"><td>${day&&dr?`${lab(qActDay)} <span class="cont">第${entry(dr,qActDay).night}晚／共${x.nights}晚</span>`:`${lab(x.cin)} → ${lab(x.cout)}`}</td><td>${esc(x.g.name)}${x.rows.length>1?` <span class="cont">×${x.rows.length}</span>`:''}</td><td>${esc(x.g.agency)}</td><td>${esc(x.g.segment||'')}</td>${actCells(x,dr)}
      <td>${k===n?'<span class="tag 決定">已輸入</span>':k===0?'<span class="tag 假預約">未輸入</span>':`<span class="tag 假預約">${k}／${n}</span>`}</td>
-     <td class="n">${fv(avgOf(x.rows))}</td><td class="n">${num(x.rows.reduce((a,g)=>a+rn(g)*actRev(g),0))}</td></tr>`}).join('')}</table>`:'<div class="empty">這個月沒有需要輸入的團體。</div>'}</div>`;
-  $('#qam').onchange=e=>{if(e.target.value){qActMonth=e.target.value;viewAct()}};
-  document.querySelectorAll('[data-am]').forEach(b=>b.onclick=()=>{qActMonth=fd(Date.UTC(y,m-1+ +b.dataset.am,1)).slice(0,7);viewAct()});
-  document.querySelector('[data-amnow]').onclick=()=>{qActMonth=today().slice(0,7);viewAct()};
+     <td class="n">${rmm?num(Math.round(it/rmm)):'—'}</td><td class="n">${num(it)}</td></tr>`}).join('')}</table>`:'<div class="empty">沒有符合條件的團體。</div>'}</div>`;
+  $('#qau').onchange=e=>{qActMode=e.target.value;viewAct()};
+  $('#qas2').onchange=e=>{qActSeg=e.target.value;viewAct()};
   $('#qat').onchange=e=>{qActTodo=e.target.checked;viewAct()};
-  document.querySelectorAll('[data-act]').forEach(x=>x.onclick=()=>openAct(x.dataset.act));
+  if(day){
+    $('#qad').onchange=e=>{if(e.target.value){qActDay=e.target.value;viewAct()}};
+    document.querySelectorAll('[data-ad]').forEach(b=>b.onclick=()=>{qActDay=fd(pd(qActDay)+b.dataset.ad*DAY);viewAct()});
+    document.querySelector('[data-adnow]').onclick=()=>{qActDay=today();viewAct()};
+  }else{
+    $('#qam').onchange=e=>{if(e.target.value){qActMonth=e.target.value;viewAct()}};
+    document.querySelectorAll('[data-am]').forEach(b=>b.onclick=()=>{qActMonth=fd(Date.UTC(y,m-1+ +b.dataset.am,1)).slice(0,7);viewAct()});
+    document.querySelector('[data-amnow]').onclick=()=>{qActMonth=today().slice(0,7);viewAct()};
+  }
+  document.querySelectorAll('[data-act]').forEach(x=>x.onclick=()=>{lastActKey=null;document.querySelectorAll('tr.last').forEach(r=>r.classList.remove('last'));openAct(x.dataset.act)});
+}
+function actDone(tg,name){
+  const g=tg[0];const M=tg.reduce((a,r)=>a+nightsOf(r),0),rooms=actRooms(g),ppl=actPpl(g),rev=tg.reduce((a,r)=>a+nightsOf(r)*actRev(r),0);
+  $('#frm').oninput=null;$('#frm').onsubmit=e=>e.preventDefault();
+  $('#frm').innerHTML=`<h3 style="margin-top:0">已寫入實績：${esc(name)}</h3><p class="hint">請再確認輸入後的總室數與總人數。</p>
+   <div class="stats"><div>總室數（每晚）<b>${rooms}</b></div><div>總人數（每晚）<b>${ppl}</b></div><div>套用晚數<b>${M}</b></div><div>金額合計<b>${num(rev)}</b></div><div>平均室單價<b>${rooms*M?num(Math.round(rev/(rooms*M))):'—'}</b></div></div>
+   <p class="hint">總室數＝客房 ${guestRooms(g)}＋T/C・D ${tcdRooms(g)}；總人數含 T/C・D，不含添い寝（${N(g.actSoine)} 人）。</p>
+   <div class="bar" style="justify-content:flex-end;margin:12px 0 0"><button type="button" class="b p" id="ok2">確認，回到總表</button></div>`;
+  $('#ok2').onclick=()=>$('#dlg').close();
 }
 function openAct(key){
   const m=MBYKEY.get(key);if(!m)return;const rows=m.rows;
@@ -420,7 +455,7 @@ function openAct(key){
       if(!manual)inp.value=gp>0?gp:'';const cur=inp.value===''?0:+inp.value;
       $('#cp').textContent=`房型換算 ${gp} 人${gp&&cur!==gp?' ⚠與輸入不同':gp?' ✓':''}`;
       const rv=actRev(o),pc=cur||gp;
-      $('#pv').textContent=`每晚合計：${actRooms(o)} 間（含 T/C・D）／房型換算人數 ${gp}（單1・雙2・三3＋T/C・D 各1人；添い寝、その他不計入人數）／金額 ${num(rv)}（房型單價×人數）／平均單價 ${pc?num(Math.round(rv/pc)):'—'}`};
+      $('#pv').textContent=`每晚合計：${actRooms(o)} 間（含 T/C・D）／房型換算人數 ${gp}（單1・雙2・三3＋T/C・D 各1人；添い寝、その他不計入人數）／金額 ${num(rv)}（房型單價×人數）／平均室單價 ${actRooms(o)?num(Math.round(rv/actRooms(o))):'—'}`};
     inp.oninput=()=>{manual=inp.value!==''};
     ['priceSingle','priceTriple'].forEach(k=>{const el=document.querySelector(`#frm [name=${k}]`);el.oninput=()=>{man[k]=el.value!==''}});
     $('#frm').oninput=pv;pv();
@@ -434,7 +469,7 @@ function openAct(key){
       if(!ch.length){$('#dlg').close();return}
       confirmView('確認實績輸入'+(tg.length>1?`（套用 ${tg.length} 筆）`:''),ch,()=>{
         tg.forEach(r=>{ACT.forEach(([k,,t])=>{if(t!=='date')r[k]=v[k]});r.actAt=today()});
-        save();render();sync({action:'upsert',records:tg.map(toRec)});
+        lastActKey=key;save();render();sync({action:'upsert',records:tg.map(toRec)});actDone(tg,m.g.name);return true;
       },()=>draw(v,sc));
     };
   }
@@ -572,7 +607,7 @@ function confirmView(title,changes,onOk,onBack){
   $('#frm').innerHTML=`<h3 style="margin-top:0">${title}</h3><p class="hint">這次共 ${changes.length} 項更動，請確認內容。按「確認」才會儲存${cfg.url?'並寫入試算表':''}。</p>
   <div class="tw"><table><tr><th>欄位</th><th>原本</th><th>更新為</th></tr>${changes.map(c=>`<tr><td>${esc(c.l)}</td><td>${esc(c.old)}</td><td><b>${esc(c.nw)}</b></td></tr>`).join('')}</table></div>
   <div class="bar" style="justify-content:flex-end;margin:14px 0 0"><button type="button" class="b" id="cb">‹ 返回修改</button><button type="button" class="b p" id="cok">確認，寫入</button></div>`;
-  $('#cb').onclick=onBack;$('#cok').onclick=()=>{onOk();$('#dlg').close()};
+  $('#cb').onclick=onBack;$('#cok').onclick=()=>{const keep=onOk();if(!keep)$('#dlg').close()};
 }
 function openEdit(id,draft){
   const orig=data.find(x=>x.id===id)||null;
