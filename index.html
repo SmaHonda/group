@@ -6,6 +6,7 @@
 <title>團體預約管理</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700;900&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <style>
 :root{--bg:#faf6f0;--panel:#fff;--ink:#2b3a4f;--sub:#6c7a8f;--bd:#2b3a4f;--acc:#9fb0e6;--accd:#3f54a8;--hl:#eef1fd;--ok:#2f7d5b;--warn:#c47a12;--bad:#c0392b;--or:#f0a63a;--dot:#ddd5c6;--line:#e3e7ef}
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#171d2b;--panel:#222b3d;--ink:#e9edf5;--sub:#9aa6bb;--bd:#05070c;--acc:#6f82c8;--accd:#aab9f0;--hl:#2b3652;--ok:#5fc097;--warn:#e8a54a;--bad:#ee7b70;--dot:#27304a;--line:#34405a}}
@@ -94,6 +95,7 @@ h3.big{margin:0 0 6px;font-size:26px;font-weight:900}
   <button data-t="rooms"><i>▥</i>房數</button>
   <button data-t="agency"><i>⚑</i>旅行社</button>
   <button data-t="act"><i>✎</i>實績</button>
+  <button data-t="rpt"><i>▤</i>月報</button>
   <button data-t="all"><i>☰</i>全部</button>
 </nav></aside>
 <div id="wrap">
@@ -439,10 +441,118 @@ function openAct(key){
   if(!$('#dlg').open)$('#dlg').showModal();
   draw(init(first),'all');
 }
-const TITLE={home:'首頁',day:'日期查詢',cal:'月曆',rooms:'房數查詢',agency:'旅行社查詢',act:'實績輸入',all:'全部團體'};
+// ---- 月報（以範本填入）
+// ---- 月報產生：以使用者的月報範本（xlsx）為底，填入資料並重建「総まとめ」的旅行社列
+async function fillTemplate(ExcelJS,buf,recs,opt){
+  const wb=new ExcelJS.Workbook();await wb.xlsx.load(buf);
+  const L=wb.getWorksheet('団体予約リスト'),S=wb.getWorksheet('総まとめ');
+  if(!L||!S)throw new Error('範本需要有「団体予約リスト」與「総まとめ」兩個分頁');
+  const clone=o=>JSON.parse(JSON.stringify(o||{}));
+  const fOf=c=>{const v=c.value;if(v&&typeof v==='object'&&(v.formula||v.sharedFormula)){try{return c.formula||v.formula||null}catch(e){return v.formula||null}}return null};
+  const NC=58;
+  let totalRow=0;for(let r=3;r<=L.rowCount;r++){if(L.getCell(r,1).value==='合計'){totalRow=r;break}}
+  if(!totalRow)throw new Error('範本的「団体予約リスト」找不到「合計」列');
+  const oldLast=totalRow-1,oldMax=L.rowCount;
+  const pat={},sty={},tpat={},tsty={};
+  for(let c=1;c<=NC;c++){const a=L.getCell(3,c),b=L.getCell(totalRow,c);pat[c]=fOf(a);sty[c]=clone(a.style);tpat[c]=fOf(b);tsty[c]=clone(b.style)}
+  for(let r=3;r<=oldMax;r++)for(let c=1;c<=NC;c++){const cell=L.getCell(r,c);cell.value=null;cell.style={}}
+  const mapRef=(f,fn)=>f.replace(/(\$?[A-Z]{1,3})(\d+)\b/g,(m,c,n)=>c+fn(+n));
+  const N=recs.length;if(!N)throw new Error('這個月沒有可匯出的資料');
+  recs.forEach((x,i)=>{const r=3+i;
+    for(let c=1;c<=NC;c++){const cell=L.getCell(r,c);cell.style=clone(sty[c]);if(pat[c])cell.value={formula:mapRef(pat[c],n=>n===3?r:n)}}
+    const set=(col,v)=>{if(v!==''&&v!=null&&!(typeof v==='number'&&isNaN(v)))L.getCell(col+r).value=v};
+    set('A',x.cin);set('B',x.cout);set('C',1);set('D',x.rcv);set('E',x.chg);set('F',x.status);set('G',x.seg);set('H',x.name);set('I',x.agency);set('J',x.office);set('K',x.contact);set('L',x.cond);set('M',x.tax);
+    set('N',x.rooms);set('O',x.tcd);set('R',x.unit);set('S',x.people);set('T',x.tcd);
+    set('Z',x.twin);set('AC',x.priceTwin);set('AE',x.single);set('AJ',x.triple);
+    if(x.priceSingle!==''&&x.priceSingle!==(x.priceTwin===''?4000:x.priceTwin+4000))set('AH',x.priceSingle);
+    if(x.priceTriple!==''&&x.priceTriple!==(x.priceTwin===''?-1000:x.priceTwin-1000))set('AM',x.priceTriple);
+    set('AT',x.soine);set('AU',x.priceSoine);set('AW',x.tc);set('AX',x.priceTC);set('AZ',x.d);set('BA',x.priceD);set('BC',x.other);set('BD',x.priceOther);set('BF',x.note);
+    L.getCell('V'+r).value={formula:`IFERROR(W${r}/U${r},0)`};L.getCell('X'+r).value={formula:`IFERROR(W${r}/Y${r},0)`};
+    L.getCell('AK'+r).value={formula:`IF(AJ${r}=0,0,AL${r}/AJ${r})`};L.getCell('AL'+r).value={formula:`AM${r}*AN${r}`};
+  });
+  const tot=3+N;
+  for(let c=1;c<=NC;c++){const cell=L.getCell(tot,c);cell.style=clone(tsty[c]);if(tpat[c])cell.value={formula:mapRef(tpat[c],n=>n===totalRow?tot:n===oldLast?tot-1:n)}}
+  L.getCell(tot,1).value='合計';
+  L.autoFilter=`A2:BF${tot}`;
+
+  // ---- 総まとめ
+  S.getCell('A1').value=`ホテルオニコウベ\n${opt.year}年${opt.month}月`;
+  S.getCell('O1').value=opt.today;
+  const NS=15;
+  const snap=r=>{const row=S.getRow(r),o={h:row.height,v:{},f:{},st:{},slave:{}};
+    for(let c=1;c<=NS;c++){const cell=S.getCell(r,c);o.st[c]=clone(cell.style);o.f[c]=fOf(cell);o.slave[c]=cell.isMerged&&cell.master&&cell.master.address!==cell.address;if(!o.f[c]&&!o.slave[c]){const v=cell.value;o.v[c]=(v&&typeof v==='object'&&v.richText)?v.richText.map(t=>t.text).join(''):v}}return o};
+  const sn={ag2:snap(14),t2:snap(18),sp:snap(19),h3a:snap(20),h3b:snap(21),ag3:snap(22),t3:snap(28),n:[30,31,32,33].map(snap)};
+  const merges=(S.model.merges||[]).filter(m=>+m.match(/\d+/)[0]>=14);
+  merges.forEach(m=>S.unMergeCells(m));
+  const lastClear=Math.max(S.rowCount,60);
+  for(let r=14;r<=lastClear;r++){const row=S.getRow(r);row.height=undefined;for(let c=1;c<=NS;c++){const cell=S.getCell(r,c);cell.value=null;cell.style={}}}
+  const put=(s,r,fn,name)=>{if(s.h)S.getRow(r).height=s.h;
+    for(let c=1;c<=NS;c++){const cell=S.getCell(r,c);cell.style=clone(s.st[c]);
+      if(s.f[c])cell.value={formula:mapRef(s.f[c],fn)};else if(s.v[c]!=null&&!s.slave[c])cell.value=s.v[c]}
+    if(name!=null)S.getCell(r,1).value=name};
+  // 旅行社區塊：範本的旅行社列(tplRow)、合計列(totRow)、區塊原本的第一列/最後一列
+  const block=(start,names0,tpl,tot,tplRow,lastRow,totRow)=>{
+    const names=names0.length?names0:['（該当なし）'];let r=start;const first=r;
+    names.forEach(n=>{put(tpl,r,x=>x===tplRow?r:x,n);r++});
+    const last=r-1;const tr=r;
+    put(tot,tr,x=>x===totRow?tr:x===tplRow?first:x===lastRow?last:x);return tr+1};
+  let r=block(14,opt.domestic,sn.ag2,sn.t2,14,17,18);
+  put(sn.sp,r,x=>x);r++;
+  const h=r;put(sn.h3a,h,x=>x);put(sn.h3b,h+1,x=>x);
+  S.mergeCells(`A${h}:A${h+1}`);[['B','F'],['G','I'],['J','L'],['M','O']].forEach(([a,b])=>S.mergeCells(`${a}${h}:${b}${h}`));
+  r=block(h+2,opt.inb,sn.ag3,sn.t3,22,27,28);
+  put(sn.sp,r,x=>x);r++;
+  sn.n.forEach((s,i)=>put(s,r+i,x=>x));S.mergeCells(`A${r}:A${r+3}`);
+  wb.calcProperties=wb.calcProperties||{};wb.calcProperties.fullCalcOnLoad=true;
+  return wb.xlsx.writeBuffer();
+}
+
+function reportRecs(ym){
+  const [y,m]=ym.split('-').map(Number);const recs=[],warn={noAct:0,tent:0,seg:0};
+  const nv=x=>(x===''||x==null||isNaN(x))?'':+x;const dt=t=>{const v=pd(t);return v==null?null:new Date(v)};
+  data.forEach(g=>{const a=pd(g.cin);if(a==null)return;
+    for(let i=0;i<nightsOf(g);i++){const t=a+i*DAY,dd=new Date(t);if(dd.getUTCFullYear()!==y||dd.getUTCMonth()+1!==m)continue;
+      const st=g.status;if(st!=='決定'&&st!=='キャンセル'){if(st==='假預約'||st==='waiting')warn.tent++;continue}
+      const ok=st==='決定';if(ok&&!hasAct(g))warn.noAct++;
+      if(!['TS','AGT','TO','OTA','INB'].includes(String(g.segment||'').trim().toUpperCase()))warn.seg++;
+      const A=k=>ok?nv(g[k]):'';
+      recs.push({_t:t,cin:dd,cout:new Date(t+DAY),rcv:dt(g.received),chg:dt(g.changed),status:st,seg:String(g.segment||'').trim(),name:g.name||'',agency:g.agency||'',office:g.office||'',contact:g.contact||'',cond:g.cond||'',tax:g.tax||'',
+        rooms:nv(g.rooms),tcd:extraOf(g),unit:nv(g.unitPerson),people:nv(g.people),
+        twin:A('actTwin'),priceTwin:A('priceTwin'),single:A('actSingle'),priceSingle:A('priceSingle'),triple:A('actTriple'),priceTriple:A('priceTriple'),
+        soine:A('actSoine'),priceSoine:A('priceSoine'),tc:A('actTC'),priceTC:A('priceTC'),d:A('actD'),priceD:A('priceD'),other:A('actOther'),priceOther:A('priceOther'),
+        note:[g.note,ok?g.actNote:''].filter(Boolean).join(' / ')})}});
+  recs.sort((a,b)=>a._t-b._t);
+  const ag=segs=>{const mp=new Map();recs.filter(x=>segs.includes(x.seg.toUpperCase())&&x.office).forEach(x=>mp.set(x.office,(mp.get(x.office)||0)+(+x.rooms||0)+(+x.tcd||0)));return [...mp].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'ja')).map(e=>e[0])};
+  return{recs,warn,domestic:ag(['TS','TO']),inb:ag(['INB'])};
+}
+const b2s=ab=>{let s='';const u=new Uint8Array(ab);for(let i=0;i<u.length;i+=8192)s+=String.fromCharCode.apply(null,u.subarray(i,i+8192));return btoa(s)};
+const s2b=b=>Uint8Array.from(atob(b),c=>c.charCodeAt(0)).buffer;
+let TPL=null,TPLNAME='';
+let qRptMonth=(()=>{const d=new Date();return fd(Date.UTC(d.getFullYear(),d.getMonth()-1,1)).slice(0,7)})();
+function viewReport(){
+  if(!TPL){try{const b=localStorage.getItem('tpl');if(b){TPL=s2b(b);TPLNAME=localStorage.getItem('tplName')||'（已儲存的範本）'}}catch(e){}}
+  const R=reportRecs(qRptMonth),w=R.warn;const n1=R.recs.filter(x=>x.status==='決定').length,n2=R.recs.length-n1;
+  $('#view').innerHTML=`<div class="panel"><div class="bar"><label>報表月份<input type="month" id="rm" value="${qRptMonth}"></label>
+    <label>月報範本（上個月的月報 xlsx）<input type="file" id="tplf" accept=".xlsx"></label>
+    <span class="hint">${TPL?`目前範本：<b>${esc(TPLNAME)}</b>（存在這台瀏覽器，每月不用重選）`:'請先選一份既有的月報當範本（只要選一次）。'}</span></div>
+    <div class="stats"><div>本月資料列（1晚1列）<b>${R.recs.length}</b></div><div>決定<b>${n1}</b></div><div>キャンセル<b>${n2}</b></div><div>實績尚未輸入的決定列<b class="${w.noAct?'risk':''}">${w.noAct}</b></div></div>
+    <div class="hint">${w.noAct?`⚠ 有 ${w.noAct} 列「決定」還沒輸入實績，月報裡會是 0。<br>`:''}${w.tent?`已排除 ${w.tent} 列假預約／waiting（月報只含決定與キャンセル）。<br>`:''}${w.seg?`⚠ 有 ${w.seg} 列的セグメント不是 TS／AGT／TO／OTA／INB（例如 FIT 或空白），這些列在「団体予約リスト」裡，但不會算進「総まとめ」的合計。<br>`:''}
+    旅行社列（案內所）：日本国內 ${R.domestic.length} 間、インバウンド ${R.inb.length} 間，會自動依本月資料產生。</div>
+    <div class="bar" style="margin:14px 0 0"><button class="b p" id="gen" ${TPL&&R.recs.length?'':'disabled'}>產生月報並下載</button></div></div>
+    <div class="panel hint">報表的「合計宿泊料金」依範本的算法：客房（每人單價×人數）＋T/C・D＋添い寝，<b>不含「その他追加」</b>（範本的計算方法註明不含追加料金）。其他追加會寫在「その他追加」欄，但不算進合計。</div>`;
+  $('#rm').onchange=e=>{if(e.target.value){qRptMonth=e.target.value;viewReport()}};
+  $('#tplf').onchange=async e=>{const f=e.target.files[0];if(!f)return;const ab=await f.arrayBuffer();TPL=ab;TPLNAME=f.name;try{localStorage.setItem('tpl',b2s(ab));localStorage.setItem('tplName',f.name)}catch(er){alert('範本太大，無法存在瀏覽器；這次可用，下次要重新選。')}viewReport()};
+  $('#gen').onclick=async()=>{const bt=$('#gen');bt.disabled=true;bt.textContent='產生中…';
+    try{const [y,m]=qRptMonth.split('-').map(Number);
+      const buf=await fillTemplate(ExcelJS,TPL,R.recs,{year:y,month:m,today:new Date(pd(today())),domestic:R.domestic,inb:R.inb});
+      const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));a.download=`団体宿泊月報_${y}年${String(m).padStart(2,'0')}月.xlsx`;a.click();
+    }catch(er){alert('產生失敗：'+er.message)}
+    bt.disabled=false;bt.textContent='產生月報並下載'};
+}
+const TITLE={home:'首頁',day:'日期查詢',cal:'月曆',rooms:'房數查詢',agency:'旅行社查詢',act:'實績輸入',rpt:'月報輸出',all:'全部團體'};
 function render(){
   buildMerge();
-  ({home:viewHome,day:()=>viewDay(qDay),cal:viewCal,rooms:viewRooms,agency:viewAgency,act:viewAct,all:viewAll})[tab]();
+  ({home:viewHome,day:()=>viewDay(qDay),cal:viewCal,rooms:viewRooms,agency:viewAgency,act:viewAct,rpt:viewReport,all:viewAll})[tab]();
   const c=s=>data.filter(g=>g.status===s).length;
   $('#ttl').innerHTML=(`<div class="ttl"><h2>${TITLE[tab]}</h2><span class="pill">共 ${data.length} 筆（決定 ${c('決定')}・假預約 ${c('假預約')}・waiting ${c('waiting')}・取消 ${c('キャンセル')}）｜連住合併後 ${MITEMS.length} 件</span></div>`)}
 
