@@ -86,6 +86,7 @@ h3.big{margin:0 0 6px;font-size:26px;font-weight:900}
 .未{color:var(--sub)}.手仕舞い{color:var(--warn)}.FINAL{color:var(--accd)}.手配OK{color:var(--ok)}
 tr.last td{background:var(--ink)!important;color:var(--bg)}tr.last td *{color:inherit!important;border-color:currentColor!important;background:transparent!important}
 .cal .c.today{outline:3px solid var(--or);outline-offset:-3px;background:var(--hl)}.cal .c.today .d{color:var(--ink);font-weight:900}.cal .c.today .d b{color:var(--or);margin-left:4px}
+[data-inv]{cursor:pointer}
 </style>
 </head>
 <body>
@@ -131,12 +132,14 @@ const FIELDS=[ // key, 標籤, type, 公司Excel欄名
 ['tax','税別（込）','text','税別（込）'],['rooms','室数','number','室数'],['unitRoom','１室単価','number','１室単価'],
 ['total','宿泊料金','number','宿泊料金'],['unitPerson','１名単価','number','１名単価'],['people','人数','number','人数'],['note','備考','text','備考'],
 ['custId','客人系統編號','text','客人系統編號'],['tcId','T/C系統編號','text','T/C系統編號'],['dId','D系統編號','text','D系統編號'],
-['latest','最新集客人數','number','最新集客人數'],['latestRooms','集客房數','number','集客房數'],['latestAt','人數更新日','date','人數更新日'],['registered','系統登錄','check','已登入系統'],['run','催行狀態','run','催行狀態'],['final','FINAL狀態','fin','是否已FINAL']];
+['latest','最新集客人數','number','最新集客人數'],['latestRooms','集客房數','number','集客房數'],['latestAt','人數更新日','date','人數更新日'],['registered','系統登錄','check','已登入系統'],['run','催行狀態','run','催行狀態'],['final','FINAL狀態','fin','是否已FINAL'],['invoice','請求書提供日','date','請求書提供日']];
 const RUNST=['集客中','催行'];
 const FINST=['未','手仕舞い','FINAL','手配OK'];
 const normFin=x=>{if(x===true||x===1||x==='1'||x==='✓'||x==='已FINAL')return 'FINAL';const o=String(x??'').trim();return FINST.includes(o)?o:(o.toUpperCase()==='FINAL'?'FINAL':'未')};
 const isFinal=g=>{const f=normFin(g.final);return f==='FINAL'||f==='手配OK'};   // 已收到客人名單
 const finTag=x=>`<span class="tag ${x}">${x}</span>`;
+const INV_AG=['翔聖トラベル','五福旅遊'].map(x=>x.normalize('NFKC'));   // 匯款付款、入住前要提供請求書的旅行社
+const invReq=g=>INV_AG.includes(String(g.agency??'').normalize('NFKC').trim());
 const hasCust=g=>/\d/.test(String(g.custId??''));
 const ACT=[['actSingle','單人房 間數','number','實績_單人房數'],['priceSingle','單人房 單價（每人）','number','實績_單人房單價'],
 ['actTwin','雙人房 間數','number','實績_雙人房數'],['priceTwin','雙人房 單價（每人）','number','實績_雙人房單價'],
@@ -212,6 +215,27 @@ function numCells(m,g,night){
   const rm=x=>`${x}＋${extra}`;
   return `<td class="n">${cv(r=>rmFmt(N(r.rooms),extraOf(r)),String)}</td><td class="n"><b>${cv(r=>r.registered?rmFmt(hasLR(r)?+r.latestRooms:0,extraOf(r)):(isFIT(r)?'0':'0＋0'),String)}</b></td><td class="n">${cv(r=>r.people??'',fv)}</td><td class="n">${cv(r=>r.latest??'',fv)}</td>`;
 }
+function invCell(m,g){
+  if(!invReq(g)||g.status==='キャンセル'||g.status==='waiting')return '';
+  const n=m.rows.length,done=m.rows.filter(r=>r.invoice).length,k=esc(m.key);
+  if(done===n)return `<span class="tag 決定" data-inv="${k}" title="點一下可取消標記">已提供 ${esc(String(m.rows[0].invoice).slice(5).replace('-','/'))}</span>`;
+  if(done)return `<span class="tag 假預約" data-inv="${k}" title="點一下標記全部為已提供">部分</span>`;
+  const urgent=m.cin&&m.cin<=fd(pd(today())+7*DAY);
+  return `<span class="tag キャンセル" data-inv="${k}" title="點一下標記為已提供請求書">${urgent?'⚠ ':''}未提供</span>`;
+}
+function toggleInv(key){
+  const m=MBYKEY.get(key);if(!m)return;const allDone=m.rows.every(r=>r.invoice);
+  const msg=allDone?`取消「${m.g.name}」的請求書「已提供」標記？`:`將「${m.g.name}」（${m.g.agency}）標記為已提供請求書（${today()}）？`;
+  if(!confirm(msg))return;
+  m.rows.forEach(r=>r.invoice=allDone?'':today());
+  save();render();sync({action:'upsert',records:m.rows.map(toRec)});
+}
+function invPanel(){
+  const pend=MITEMS.filter(m=>invReq(m.g)&&(m.g.status==='決定'||m.g.status==='假預約')&&m.cout>=today()&&!m.rows.every(r=>r.invoice)).sort(byCin);
+  if(!pend.length)return '';
+  return `<div class="panel"><h3 style="margin-top:0">請求書尚未提供的團體（${pend.length}）</h3><div class="hint" style="margin-bottom:6px">翔聖トラベル、五福旅遊為匯款付款，入住前要先提供請求書。點標籤可標記為已提供。</div>
+  <div class="tw"><table><tr><th>入住</th><th>団体名</th><th>旅行会社</th><th>狀態</th><th>請求書</th></tr>${pend.map(m=>`<tr><td>${lab(m.cin)}</td><td>${esc(m.g.name)}${m.rows.length>1?` <span class="cont">×${m.rows.length}</span>`:''}</td><td>${esc(m.g.agency)}</td><td>${tag(m.g.status)}</td><td>${invCell(m,m.g)}</td></tr>`).join('')}</table></div></div>`;
+}
 function groupRows(list,noAg){
   return list.map(({m,g,night,of})=>{const n=m.rows.length;
    const cv=(f,fmt)=>(night||uni(m,f))?fmt(f(g)):'<span class="cont">詳細</span>';
@@ -219,9 +243,9 @@ function groupRows(list,noAg){
    <td>${esc(g.id)}${n>1?` <span class="cont">×${n}</span>`:''}</td><td>${esc(g.name)}</td>${noAg?'':`<td>${esc(g.agency)}</td>`}<td>${tag(g.status)}</td>
    <td>${lab(m.cin)} → ${lab(m.cout)} ${of>1?`<span class="cont">${night?`第${night}晚/共${of}晚`:`${of}泊`}</span>`:''}</td>
    ${numCells(m,g,night)}<td class="n">${cv(r=>r.unitPerson,num)}</td><td>${cv(r=>r.run||'',runTag)}</td>
-   <td>${esc(g.custId)}</td><td>${esc(g.tcId)}</td><td>${esc(g.dId)}</td><td>${mark(m,'registered','未登錄')}</td><td>${cv(r=>normFin(r.final),finTag)}</td><td>${esc(g.note)}</td></tr>`}).join('');
+   <td>${esc(g.custId)}</td><td>${esc(g.tcId)}</td><td>${esc(g.dId)}</td><td>${mark(m,'registered','未登錄')}</td><td>${cv(r=>normFin(r.final),finTag)}</td><td>${invCell(m,g)}</td><td>${esc(g.note)}</td></tr>`}).join('');
 }
-const HEAD=`<tr><th>編號</th><th>団体名</th><th>旅行会社</th><th>狀態</th><th>住宿期間</th>${NUMHEAD}<th class="n">1人單價</th><th>催行</th><th>客人編號</th><th>T/C</th><th>D</th><th>系統登錄</th><th>FINAL</th><th>備註</th></tr>`;
+const HEAD=`<tr><th>編號</th><th>団体名</th><th>旅行会社</th><th>狀態</th><th>住宿期間</th>${NUMHEAD}<th class="n">1人單價</th><th>催行</th><th>客人編號</th><th>T/C</th><th>D</th><th>系統登錄</th><th>FINAL</th><th>請求書</th><th>備註</th></tr>`;
 const HEAD_NA=HEAD.replace('<th>旅行会社</th>','');
 // 月份篩選（空集合＝全部月份）
 const MS={ag:new Set(),all:new Set()};
@@ -296,13 +320,13 @@ function viewHome(){
   const risky=[...occ.entries()].filter(([k,v])=>v.rooms>=homeMin&&pd(k)>=t0&&pd(k)<=end.getTime()).sort();
   const week=[];for(let i=0;i<7;i++)week.push(fd(t0+i*DAY));
   const wrow=e=>`<tr class="click" style="${e.g.status==='waiting'?'opacity:.6':''}" ${rowAttr(e.m,e.g)}><td>${esc(e.g.name)}${e.m.rows.length>1?` <span class="cont">×${e.m.rows.length}</span>`:''}</td><td>${esc(e.g.agency)}</td><td>${tag(e.g.status)}</td><td>${runTag(e.g.run)}</td>
-    <td>${e.of>1?`<span class="cont">第${e.night}晚／共${e.of}晚</span>`:'一泊'}</td>${numCells(e.m,e.g,e.night)}<td>${mark(e.m,'registered','未登錄')}</td><td>${finTag(normFin(e.g.final))}</td></tr>`;
-  $('#view').innerHTML=`
+    <td>${e.of>1?`<span class="cont">第${e.night}晚／共${e.of}晚</span>`:'一泊'}</td>${numCells(e.m,e.g,e.night)}<td>${mark(e.m,'registered','未登錄')}</td><td>${finTag(normFin(e.g.final))}</td><td>${invCell(e.m,e.g)}</td></tr>`;
+  $('#view').innerHTML=invPanel()+`
   <h3>接下來一週</h3>`+week.map(k=>{const o=occ.get(k)||EMPTY();
     return `<div class="panel"><div class="bar" style="margin-bottom:6px;align-items:baseline"><h3 style="margin:0;cursor:pointer" data-goday="${k}">${lab(k)} ${k===today()?'（今天）':''}</h3>
     <span class="hint">${o.list.length} 團／預約 ${o.rooms} 間（已登錄 ${o.colB}＋${o.colX}）／集客 ${o.people} 人${cap?`／剩餘 ${cap-o.rooms} 間`:''}</span></div>
     <div class="meter"><i style="width:${o.rooms?Math.min(100,(o.colB+o.colX)/o.rooms*100):0}%"></i></div>
-    ${o.list.length||o.wait.length?`<div class="tw"><table><tr><th>団体名</th><th>旅行会社</th><th>狀態</th><th>催行</th><th>住宿</th>${NUMHEAD}<th>系統登錄</th><th>FINAL</th></tr>${o.list.map(wrow).join('')}${o.wait.map(wrow).join('')}</table></div>`:'<div class="hint">沒有團體住宿。</div>'}</div>`}).join('');
+    ${o.list.length||o.wait.length?`<div class="tw"><table><tr><th>団体名</th><th>旅行会社</th><th>狀態</th><th>催行</th><th>住宿</th>${NUMHEAD}<th>系統登錄</th><th>FINAL</th><th>請求書</th></tr>${o.list.map(wrow).join('')}${o.wait.map(wrow).join('')}</table></div>`:'<div class="hint">沒有團體住宿。</div>'}</div>`}).join('');
   document.querySelectorAll('[data-goday]').forEach(x=>x.onclick=()=>goDay(x.dataset.goday));
 }
 function viewCal(){
@@ -323,7 +347,7 @@ function viewCal(){
   document.querySelector('[data-thism]').onclick=()=>{qMonth=today().slice(0,7);viewCal()};
   document.querySelectorAll('[data-day]').forEach(c=>c.onclick=()=>goDay(c.dataset.day));
 }
-let qAg='',qAgShow='active',qAgSort='count',qAgHide=false,qAgAll=false;
+let qAg='',qAgShow='active',qAgSort='count',qAgHide=true,qAgAll=false;
 const past=m=>m.cin&&m.cin<today()&&m.rows.every(isFinal);
 const vis=m=>qAgAll||!past(m);
 const byCin=(a,b)=>(a.cin||'').localeCompare(b.cin||'');
@@ -620,12 +644,13 @@ function openEdit(id,draft){
     if(t==='run')return `<label>${l}<select name="${k}"><option value="">—</option>${RUNST.map(o=>`<option ${v===o?'selected':''}>${o}</option>`).join('')}</select></label>`;
     if(t==='fin')return `<label>${l}<select name="${k}">${FINST.map(o=>`<option ${normFin(v)===o?'selected':''}>${o}</option>`).join('')}</select></label>`;
     if(t==='check')return `<label>${l}（依客人系統編號自動）<select name="${k}" disabled><option value="">未系統登錄</option><option value="1" ${v?'selected':''}>已系統登錄</option></select></label>`;
-    return `<label class="${k==='note'?'w2':''}">${l}<input name="${k}" type="${t}" value="${esc(v)}" ${k==='nights'?'placeholder="自動計算"':''}></label>`}).join('')+
+    return `<label class="${k==='note'?'w2':''}" ${k==='invoice'?`data-invf style="${invReq(g)?'':'display:none'}"`:''}>${l}${k==='invoice'?'（空白＝未提供）':''}<input name="${k}" type="${t}" value="${esc(v)}" ${k==='nights'?'placeholder="自動計算"':''}></label>`}).join('')+
    `</div><p class="hint">泊數留空會由 C/IN、C/OUT 自動計算。編輯「最新集客人數」或「集客房數」時，更新日會自動填今天。預約房數＝室數＋T/C・D；系統登錄房數＝集客房數（未填視為 0），只有勾選「系統登錄」的團才計入，並另加 T/C・D。按「儲存」後會先出現確認視窗，列出這次的更動。實績（實際入住房型、單價）請到「實績」頁輸入。「系統登錄」會依「客人系統編號」裡有沒有數字自動判斷，不用手動選。</p>
    <div class="bar" style="justify-content:space-between;margin:0"><div>${isNew?'':'<button type="button" class="b" id="del" style="color:var(--bad)">刪除</button>'}</div>
    <div class="bar" style="margin:0"><button type="button" class="b" id="cx">取消</button><button class="b p">儲存</button></div></div>`;
   if(!$('#dlg').open)$('#dlg').showModal();
   $('#cx').onclick=()=>$('#dlg').close();
+  {const ag=document.querySelector('#frm [name=agency]'),inf=document.querySelector('#frm [data-invf]');if(ag&&inf)ag.oninput=()=>{inf.style.display=invReq({agency:ag.value})?'':'none'}}
   {const ci=document.querySelector('#frm [name=custId]'),rg=document.querySelector('#frm [name=registered]');if(ci&&rg)ci.oninput=()=>{rg.value=/\d/.test(ci.value)?'1':''}}
   if(!isNew)$('#del').onclick=()=>{if(confirm('確定刪除這個團體？（'+orig.id+' '+(orig.name||'')+'）')){data=data.filter(x=>x.id!==id);save();render();sync({action:'delete',id});$('#dlg').close()}};
   $('#frm').onsubmit=e=>{
@@ -727,7 +752,8 @@ function openCfg(){
 // ---- wiring
 $('#cfg').onclick=openCfg;$('#pull').onclick=pull;
 $('#tabs').onclick=e=>{const bt=e.target.closest('button');const t=bt&&bt.dataset.t;if(!t)return;tab=t;document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b===bt));render()};
-$('#view').onclick=e=>{const r=e.target.closest('tr[data-id]');if(r){openEdit(r.dataset.id);return}
+$('#view').onclick=e=>{const iv=e.target.closest('[data-inv]');if(iv){toggleInv(iv.dataset.inv);return}
+  const r=e.target.closest('tr[data-id]');if(r){openEdit(r.dataset.id);return}
   const mg=e.target.closest('tr[data-mg]');if(mg){const nx=mg.nextElementSibling;if(nx&&nx.classList.contains('det'))nx.remove();else mg.insertAdjacentHTML('afterend',detHTML(MBYKEY.get(mg.dataset.mg)))}};
 let sT;$('#qs0').oninput=e=>{clearTimeout(sT);sT=setTimeout(()=>{qText=e.target.value;tab='all';document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t==='all'));render()},250)};
 $('#add').onclick=()=>openEdit('');
