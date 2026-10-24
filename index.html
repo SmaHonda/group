@@ -87,6 +87,25 @@ h3.big{margin:0 0 6px;font-size:26px;font-weight:900}
 tr.last td{background:var(--ink)!important;color:var(--bg)}tr.last td *{color:inherit!important;border-color:currentColor!important;background:transparent!important}
 .cal .c.today{outline:3px solid var(--or);outline-offset:-3px;background:var(--hl)}.cal .c.today .d{color:var(--ink);font-weight:900}.cal .c.today .d b{color:var(--or);margin-left:4px}
 [data-inv]{cursor:pointer}
+#dlg2{width:min(480px,94vw)}
+.ask-card{display:flex;flex-direction:column;gap:2px;border:2.5px solid var(--bd);border-radius:12px;padding:8px 14px;background:var(--hl);margin:10px 0}
+.ask-card span{font-size:13px;color:var(--sub)}
+button.b.dng{background:var(--bad);color:#fff}
+input.pk{cursor:pointer;padding-right:30px;background-repeat:no-repeat;background-position:right 9px center;background-size:15px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='2' y='3' width='12' height='11' rx='2' fill='none' stroke='%238a94a8' stroke-width='1.6'/%3E%3Cpath d='M2 7h12M5 1.5v3M11 1.5v3' stroke='%238a94a8' stroke-width='1.6' fill='none'/%3E%3C/svg%3E")}
+.pkpop{position:fixed;z-index:99999;width:296px;background:var(--panel);color:var(--ink);border:3px solid var(--bd);border-radius:18px;box-shadow:5px 5px 0 var(--bd);padding:12px}
+.pkpop[hidden]{display:none}
+.pk-h{display:flex;align-items:center;justify-content:space-between;gap:4px;margin-bottom:8px}
+.pk-h .b{padding:1px 9px;box-shadow:none;border-width:2px}
+.pk-t{flex:1;border:0;background:none;color:var(--ink);font:900 16px/1.4 "Noto Serif TC",serif;text-align:center;cursor:pointer;padding:2px 0}
+span.pk-t{cursor:default}
+.pk-g{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.pk-g i{font-style:normal;text-align:center;font-size:12px;color:var(--sub);font-weight:700;padding-bottom:2px}
+.pk-g button,.pk-m button{height:34px;border:2px solid transparent;border-radius:10px;background:none;color:var(--ink);font:inherit;cursor:pointer}
+.pk-m{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.pk-m button{height:46px;font-weight:700}
+.pk-g button:hover,.pk-m button:hover{background:var(--hl)}
+.pkpop .tdy{border-color:var(--or)}
+.pkpop .sel{background:var(--acc);border-color:var(--bd);font-weight:900}
+.pk-f{display:flex;justify-content:space-between;margin-top:10px}.pk-f .b{padding:1px 12px;box-shadow:none;border-width:2px}
 </style>
 </head>
 <body>
@@ -120,6 +139,7 @@ tr.last td{background:var(--ink)!important;color:var(--bg)}tr.last td *{color:in
 </div>
 
 <dialog id="dlg"><form method="dialog" id="frm"></form></dialog>
+<dialog id="dlg2"></dialog>
 
 <script>
 const $=s=>document.querySelector(s);
@@ -223,10 +243,19 @@ function invCell(m,g){
   const urgent=m.cin&&m.cin<=fd(pd(today())+7*DAY);
   return `<span class="tag キャンセル" data-inv="${k}" title="點一下標記為已提供請求書">${urgent?'⚠ ':''}未提供</span>`;
 }
-function toggleInv(key){
+function ask(title,body,okLabel,danger){
+  return new Promise(res=>{const d=$('#dlg2');let done=false;
+    const fin=v=>{if(done)return;done=true;res(v);if(d.open)d.close()};
+    d.innerHTML=`<h3 style="margin-top:0">${title}</h3><div>${body}</div><div class="bar" style="justify-content:flex-end;margin:16px 0 0"><button type="button" class="b" id="ak-no">取消</button><button type="button" class="b p${danger?' dng':''}" id="ak-ok">${okLabel||'確認'}</button></div>`;
+    d.oncancel=()=>fin(false);d.onclose=()=>fin(false);
+    $('#ak-no').onclick=()=>fin(false);$('#ak-ok').onclick=()=>fin(true);
+    d.showModal();$('#ak-ok').focus();});
+}
+async function toggleInv(key){
   const m=MBYKEY.get(key);if(!m)return;const allDone=m.rows.every(r=>r.invoice);
-  const msg=allDone?`取消「${m.g.name}」的請求書「已提供」標記？`:`將「${m.g.name}」（${m.g.agency}）標記為已提供請求書（${today()}）？`;
-  if(!confirm(msg))return;
+  const info=`<div class="ask-card"><b>${esc(m.g.name)}</b><span>${esc(m.g.agency)}・${lab(m.cin)} → ${lab(m.cout)}${m.rows.length>1?`（${m.rows.length} 筆）`:''}</span></div>`;
+  const ok=await ask(allDone?'取消請求書「已提供」標記':'標記為已提供請求書',info+(allDone?'<p>這個團會回到「未提供」狀態。</p>':`<p>標記日期：<b>${today()}</b></p><p class="hint">這間旅行社為匯款付款，入住前須提供請求書。</p>`),allDone?'取消標記':'確認已提供',allDone);
+  if(!ok)return;
   m.rows.forEach(r=>r.invoice=allDone?'':today());
   save();render();sync({action:'upsert',records:m.rows.map(toRec)});
 }
@@ -652,7 +681,7 @@ function openEdit(id,draft){
   $('#cx').onclick=()=>$('#dlg').close();
   {const ag=document.querySelector('#frm [name=agency]'),inf=document.querySelector('#frm [data-invf]');if(ag&&inf)ag.oninput=()=>{inf.style.display=invReq({agency:ag.value})?'':'none'}}
   {const ci=document.querySelector('#frm [name=custId]'),rg=document.querySelector('#frm [name=registered]');if(ci&&rg)ci.oninput=()=>{rg.value=/\d/.test(ci.value)?'1':''}}
-  if(!isNew)$('#del').onclick=()=>{if(confirm('確定刪除這個團體？（'+orig.id+' '+(orig.name||'')+'）')){data=data.filter(x=>x.id!==id);save();render();sync({action:'delete',id});$('#dlg').close()}};
+  if(!isNew)$('#del').onclick=async()=>{if(await ask('刪除團體',`<div class="ask-card"><b>${esc(orig.name||'（未命名）')}</b><span>${esc(orig.id)}・${esc(orig.agency||'')}</span></div><p>刪除後無法復原。</p>`,'刪除',true)){data=data.filter(x=>x.id!==id);save();render();sync({action:'delete',id});$('#dlg').close()}};
   $('#frm').onsubmit=e=>{
     e.preventDefault();
     const f=new FormData($('#frm'));const n={...g};const base=orig||{};
@@ -726,7 +755,7 @@ async function pull(){
     const j=await r.json();if(j.error)throw new Error(j.error);
     const rows=j.rows.filter(x=>x['編號']);
     if(!rows.length&&data.length){
-      if(confirm('試算表目前是空的。要把這台電腦上的 '+data.length+' 筆資料上傳到試算表嗎？')){await sync({action:'upsert',records:data.map(toRec)})}
+      if(await ask('上傳本機資料？',`<p>試算表目前是空的。要把這台電腦上的 <b>${data.length}</b> 筆資料上傳到試算表嗎？</p>`,'上傳')){await sync({action:'upsert',records:data.map(toRec)})}
       return;
     }
     data=rows.map(fromRec);save();render();setSt('已讀取 '+rows.length+' 筆 '+new Date().toLocaleTimeString().slice(0,5));
@@ -748,6 +777,61 @@ function openCfg(){
     pull();
   };
 }
+
+// ---- 日期／月份選單（取代瀏覽器內建的）
+(function(){
+  try{
+  const pop=document.createElement('div');pop.id='pkpop';pop.className='pkpop';pop.hidden=true;document.body.appendChild(pop);
+  let el=null,y=0,m=1,view='day';const pad=n=>String(n).padStart(2,'0');const iso=(Y,M,D)=>Y+'-'+pad(M)+'-'+pad(D);
+  const close=()=>{pop.hidden=true;el=null};
+  const fire=()=>{el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}))};
+  function draw(){
+    const kind=el.dataset.pk,cur=el.value||'',tdy=today();const canClear=!!el.closest('#frm');
+    const foot=`<div class="pk-f"><button type="button" class="b" data-a="today">${kind==='month'?'本月':'今天'}</button>${canClear?'<button type="button" class="b" data-a="clear">清除</button>':''}</div>`;
+    if(view==='day'){
+      const lead=new Date(Date.UTC(y,m-1,1)).getUTCDay(),days=new Date(Date.UTC(y,m,0)).getUTCDate();
+      let h=`<div class="pk-h"><button type="button" class="b" data-a="py">«</button><button type="button" class="b" data-a="pm">‹</button><button type="button" class="pk-t" data-a="tm">${y}年 ${m}月</button><button type="button" class="b" data-a="nm">›</button><button type="button" class="b" data-a="ny">»</button></div><div class="pk-g">`+'日一二三四五六'.split('').map(x=>`<i>${x}</i>`).join('');
+      for(let i=0;i<lead;i++)h+='<span></span>';
+      for(let d=1;d<=days;d++){const v=iso(y,m,d);h+=`<button type="button" data-d="${v}" class="${v===cur?'sel':''} ${v===tdy?'tdy':''}">${d}</button>`}
+      pop.innerHTML=h+'</div>'+foot;
+    }else{
+      pop.innerHTML=`<div class="pk-h"><button type="button" class="b" data-a="py">«</button><span class="pk-t">${y}年</span><button type="button" class="b" data-a="ny">»</button></div><div class="pk-m">`+
+        Array.from({length:12},(_,i)=>{const v=y+'-'+pad(i+1);return `<button type="button" data-mo="${v}" class="${v===cur.slice(0,7)?'sel':''} ${v===tdy.slice(0,7)?'tdy':''}">${i+1}月</button>`}).join('')+'</div>'+foot;
+    }
+  }
+  function place(){
+    const host=el.closest('dialog')||document.body;if(pop.parentNode!==host)host.appendChild(pop);
+    pop.hidden=false;const r=el.getBoundingClientRect(),w=pop.offsetWidth,h=pop.offsetHeight;
+    let top=r.bottom+6,left=r.left;if(top+h>innerHeight-8)top=Math.max(8,r.top-h-6);if(left+w>innerWidth-8)left=Math.max(8,innerWidth-w-8);
+    pop.style.top=top+'px';pop.style.left=left+'px';
+  }
+  function open(input){
+    el=input;const kind=el.dataset.pk;const v=(el.value||'').match(/^(\d{4})-(\d{2})/);const n=new Date();
+    y=v?+v[1]:n.getFullYear();m=v?+v[2]:n.getMonth()+1;view=kind==='month'?'month':'day';draw();place();
+  }
+  pop.addEventListener('mousedown',e=>e.preventDefault());
+  pop.addEventListener('click',e=>{
+    const b=e.target.closest('button');if(!b||!el)return;e.stopPropagation();
+    const a=b.dataset.a,kind=el.dataset.pk;
+    if(b.dataset.d){el.value=b.dataset.d;fire();close();return}
+    if(b.dataset.mo){if(kind==='month'){el.value=b.dataset.mo;fire();close()}else{const t=b.dataset.mo.split('-');y=+t[0];m=+t[1];view='day';draw()}return}
+    if(a==='py')y--;else if(a==='ny')y++;
+    else if(a==='pm'){m--;if(m<1){m=12;y--}}else if(a==='nm'){m++;if(m>12){m=1;y++}}
+    else if(a==='tm')view='month';
+    else if(a==='today'){el.value=kind==='month'?today().slice(0,7):today();fire();close();return}
+    else if(a==='clear'){el.value='';fire();close();return}
+    draw();place();
+  });
+  document.addEventListener('mousedown',e=>{if(el&&!pop.contains(e.target)&&e.target!==el)close()});
+  document.addEventListener('keydown',e=>{if(el&&e.key==='Escape'){e.preventDefault();e.stopPropagation();close()}},true);
+  window.addEventListener('resize',()=>{if(el)close()});
+  window.addEventListener('scroll',e=>{if(el&&!pop.contains(e.target))close()},true);
+  document.addEventListener('click',e=>{const i=e.target.closest&&e.target.closest('input.pk');if(i){if(el===i){close()}else open(i)}});
+  document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&document.activeElement&&document.activeElement.classList&&document.activeElement.classList.contains('pk')){e.preventDefault();open(document.activeElement)}});
+  const enhance=()=>document.querySelectorAll('input[type=date],input[type=month]').forEach(i=>{const k=i.type;i.dataset.pk=k;i.type='text';i.readOnly=true;i.classList.add('pk');i.setAttribute('autocomplete','off');i.placeholder=k==='month'?'選擇月份':'選擇日期'});
+  new MutationObserver(()=>requestAnimationFrame(enhance)).observe(document.body,{childList:true,subtree:true});enhance();
+  }catch(err){console.warn('picker',err)}
+})();
 
 // ---- wiring
 $('#cfg').onclick=openCfg;$('#pull').onclick=pull;
