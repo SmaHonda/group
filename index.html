@@ -158,7 +158,8 @@ const FINST=['未','手仕舞い','FINAL','手配OK'];
 const normFin=x=>{if(x===true||x===1||x==='1'||x==='✓'||x==='已FINAL')return 'FINAL';const o=String(x??'').trim();return FINST.includes(o)?o:(o.toUpperCase()==='FINAL'?'FINAL':'未')};
 const isFinal=g=>{const f=normFin(g.final);return f==='FINAL'||f==='手配OK'};   // 已收到客人名單
 const finTag=x=>`<span class="tag ${x}">${x}</span>`;
-const INV_AG=['翔聖トラベル','五福旅遊'].map(x=>x.normalize('NFKC'));   // 匯款付款、入住前要提供請求書的旅行社
+const INV_NAMES=['翔聖トラベル','五福旅遊','TUJ旅行会社'];
+const INV_AG=INV_NAMES.map(x=>x.normalize('NFKC'));   // 匯款付款、入住前要提供請求書的旅行社
 const invReq=g=>INV_AG.includes(String(g.agency??'').normalize('NFKC').trim());
 const hasCust=g=>/\d/.test(String(g.custId??''));
 const ACT=[['actSingle','單人房 間數','number','實績_單人房數'],['priceSingle','單人房 單價（每人）','number','實績_單人房單價'],
@@ -262,7 +263,7 @@ async function toggleInv(key){
 function invPanel(){
   const pend=MITEMS.filter(m=>invReq(m.g)&&(m.g.status==='決定'||m.g.status==='假預約')&&m.cout>=today()&&!m.rows.every(r=>r.invoice)).sort(byCin);
   if(!pend.length)return '';
-  return `<div class="panel"><h3 style="margin-top:0">請求書尚未提供的團體（${pend.length}）</h3><div class="hint" style="margin-bottom:6px">翔聖トラベル、五福旅遊為匯款付款，入住前要先提供請求書。點標籤可標記為已提供。</div>
+  return `<div class="panel"><h3 style="margin-top:0">請求書尚未提供的團體（${pend.length}）</h3><div class="hint" style="margin-bottom:6px">${INV_NAMES.join('、')} 為匯款付款，入住前要先提供請求書。點標籤可標記為已提供。</div>
   <div class="tw"><table><tr><th>入住</th><th>団体名</th><th>旅行会社</th><th>狀態</th><th>請求書</th></tr>${pend.map(m=>`<tr><td>${lab(m.cin)}</td><td>${esc(m.g.name)}${m.rows.length>1?` <span class="cont">×${m.rows.length}</span>`:''}</td><td>${esc(m.g.agency)}</td><td>${tag(m.g.status)}</td><td>${invCell(m,m.g)}</td></tr>`).join('')}</table></div></div>`;
 }
 function groupRows(list,noAg){
@@ -447,6 +448,7 @@ function viewAct(){
   const rows=base.flatMap(x=>x.rows);
   const done=base.filter(x=>rowsIn(x).every(hasAct)).length;
   const per=day?'當日':'本月';
+  const pplN=rows.reduce((a,g)=>a+rn(g)*actPpl(g),0);
   const rmN=rows.reduce((a,g)=>a+rn(g)*actRooms(g),0),rv=rows.reduce((a,g)=>a+rn(g)*actRev(g),0);
   $('#view').innerHTML=`<div class="panel"><div class="bar">
     <label>檢視單位<select id="qau"><option value="month" ${day?'':'selected'}>整個月</option><option value="day" ${day?'selected':''}>單日</option></select></label>
@@ -454,7 +456,7 @@ function viewAct(){
     :`<label>月份<input type="month" id="qam" value="${qActMonth}"></label><button class="b" data-am="-1">‹ 上個月</button><button class="b" data-am="1">下個月 ›</button><button class="b" data-amnow>本月</button>`}
     <label>セグメント<select id="qas2"><option value="">全部</option>${segs.map(x=>`<option ${qActSeg===x?'selected':''}>${esc(x)}</option>`).join('')}</select></label>
     <label style="flex-direction:row;align-items:center;gap:6px;color:var(--ink)"><input type="checkbox" id="qat" ${qActTodo?'checked':''}> 只看尚未輸入完成的</label></div>
-    <div class="stats"><div>已入住團數<b>${base.length}</b></div><div>實績輸入完成<b style="color:var(--ok)">${done}／${base.length}</b></div><div>${per}實績房晚<b>${rmN}</b></div><div>${per}實績金額<b>${num(rv)}</b></div><div>${per}平均室單價<b>${rmN?num(Math.round(rv/rmN)):'—'}</b></div></div>
+    <div class="stats"><div>已入住團數<b>${base.length}</b></div><div>實績輸入完成<b style="color:var(--ok)">${done}／${base.length}</b></div><div>${per}實績房晚<b>${rmN}</b></div><div>${per}實績人晚<b>${pplN}</b></div><div>${per}實績金額<b>${num(rv)}</b></div><div>${per}平均室單價<b>${rmN?num(Math.round(rv/rmN)):'—'}</b></div></div>
     <div class="hint">已入住（入住日≤今天）且狀態為「決定」的團。點一列輸入實績；只寫入實績欄位，不動預約資料。金額＝各房型間數×人數×每人單價＋T/C・D＋添い寝＋その他（預設計入）；平均單價＝金額÷實際室數（每間房）。實際室數、實際人數都是整團（客人＋T/C・D，人數不含添い寝），未輸入為 0。上一次處理的那一列會反色，點下一列後解除。</div></div>
     <div class="panel tw">${items.length?`<table><tr><th>期間</th><th>団体名</th><th>旅行会社</th><th>セグメント</th>${ACTHEAD}<th>實績輸入</th><th class="n">平均單價</th><th class="n">金額</th></tr>
     ${items.map(x=>{const rr=rowsIn(x),k=rr.filter(hasAct).length,n=rr.length,dr=dayRow(x);
