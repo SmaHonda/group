@@ -118,6 +118,7 @@ span.pk-t{cursor:default}
   <button data-t="agency"><i>⚑</i>旅行社</button>
   <button data-t="act"><i>✎</i>實績</button>
   <button data-t="rpt"><i>▤</i>月報</button>
+  <button data-t="inv"><i>✉</i>請求書</button>
   <button data-t="all"><i>☰</i>全部</button>
 </nav></aside>
 <div id="wrap">
@@ -158,9 +159,12 @@ const FINST=['未','手仕舞い','FINAL','手配OK'];
 const normFin=x=>{if(x===true||x===1||x==='1'||x==='✓'||x==='已FINAL')return 'FINAL';const o=String(x??'').trim();return FINST.includes(o)?o:(o.toUpperCase()==='FINAL'?'FINAL':'未')};
 const isFinal=g=>{const f=normFin(g.final);return f==='FINAL'||f==='手配OK'};   // 已收到客人名單
 const finTag=x=>`<span class="tag ${x}">${x}</span>`;
-const INV_NAMES=['翔聖トラベル','五福旅遊','TUJ旅行会社'];
-const INV_AG=INV_NAMES.map(x=>x.normalize('NFKC'));   // 匯款付款、入住前要提供請求書的旅行社
-const invReq=g=>INV_AG.includes(String(g.agency??'').normalize('NFKC').trim());
+let INV_NAMES=['翔聖トラベル','五福旅遊','TUJ旅行会社'];   // 預設名單；之後可在「請求書」頁自行增減
+try{const t=JSON.parse(localStorage.getItem('invAg')||'null');if(Array.isArray(t))INV_NAMES=t}catch(e){}
+const normA=x=>String(x??'').normalize('NFKC').trim();
+let INV_AG=INV_NAMES.map(normA);
+const saveInv=()=>{INV_AG=INV_NAMES.map(normA);try{localStorage.setItem('invAg',JSON.stringify(INV_NAMES))}catch(e){}};   // 匯款付款、入住前要提供請求書的旅行社
+const invReq=g=>INV_AG.includes(normA(g.agency));
 const hasCust=g=>/\d/.test(String(g.custId??''));
 const ACT=[['actSingle','單人房 間數','number','實績_單人房數'],['priceSingle','單人房 單價（每人）','number','實績_單人房單價'],
 ['actTwin','雙人房 間數','number','實績_雙人房數'],['priceTwin','雙人房 單價（每人）','number','實績_雙人房單價'],
@@ -646,10 +650,28 @@ function viewReport(){
     }catch(er){alert('產生失敗：'+er.message)}
     bt.disabled=false;bt.textContent='產生月報並下載'};
 }
-const TITLE={home:'首頁',day:'日期查詢',cal:'月曆',rooms:'房數查詢',agency:'旅行社查詢',act:'實績輸入',rpt:'月報輸出',all:'全部團體'};
+function viewInv(){
+  const names=[...new Set(data.map(g=>g.agency).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ja')).filter(n=>!INV_AG.includes(normA(n)));
+  const st=n=>{const k=normA(n);const its=MITEMS.filter(m=>normA(m.g.agency)===k&&m.g.status!=='キャンセル'&&m.g.status!=='waiting');const done=its.filter(m=>m.rows.every(r=>r.invoice)).length;return{n:its.length,done,todo:its.length-done}};
+  $('#view').innerHTML=`<div class="panel"><h3 style="margin-top:0">需要提供請求書的旅行社名單</h3>
+    <div class="hint" style="margin-bottom:10px">名單裡的旅行社，在所有列表會多一個「請求書」欄，並在首頁和下方提醒你還沒提供的團。名稱要跟「旅行会社名」欄一致（全形半形、前後空白不影響）。名單只存在這台電腦的瀏覽器裡。</div>
+    <div class="bar"><label>旅行社名稱<input id="ivn" list="ivl" placeholder="輸入或選擇旅行会社名" style="width:280px"></label>
+    <datalist id="ivl">${names.map(n=>`<option value="${esc(n)}">`).join('')}</datalist><button class="b p" id="ivadd">＋ 新增到名單</button><span class="hint" id="ivmsg"></span></div>
+    ${INV_NAMES.length?`<div class="tw"><table><tr><th>旅行会社名</th><th class="n">團體數</th><th class="n">已提供</th><th class="n">未提供</th><th></th></tr>
+    ${INV_NAMES.map((n,i)=>{const t=st(n);return `<tr><td><b>${esc(n)}</b>${t.n?'':' <span class="hint">（目前資料裡沒有這個名稱的團）</span>'}</td><td class="n">${t.n}</td><td class="n" style="color:var(--ok)">${t.done}</td><td class="n" style="color:${t.todo?'var(--bad)':'inherit'}"><b>${t.todo}</b></td><td><button class="b" data-ivdel="${i}">移除</button></td></tr>`}).join('')}</table></div>`:'<div class="empty">名單是空的，先在上方新增旅行社。</div>'}</div>`+
+    (invPanel()||'<div class="panel hint">目前沒有尚未提供請求書的團體。</div>');
+  const add=()=>{const v=$('#ivn').value.trim();if(!v)return;
+    if(INV_AG.includes(normA(v))){$('#ivmsg').textContent='「'+v+'」已經在名單中';return}
+    const known=data.some(g=>normA(g.agency)===normA(v));INV_NAMES.push(v);saveInv();render();
+    if(!known)$('#ivmsg').textContent='已新增；但目前資料裡沒有完全相同的旅行会社名，請確認拼字。'};
+  $('#ivadd').onclick=add;$('#ivn').onkeydown=e=>{if(e.key==='Enter')add()};
+  document.querySelectorAll('[data-ivdel]').forEach(b=>b.onclick=async()=>{const i=+b.dataset.ivdel,n=INV_NAMES[i];
+    if(await ask('從名單移除旅行社',`<div class="ask-card"><b>${esc(n)}</b><span>${st(n).n} 團・未提供 ${st(n).todo} 團</span></div><p>移除後，這間旅行社的團就不會再顯示「請求書」欄與提醒。已記錄的提供日不會被刪除。</p>`,'移除',true)){INV_NAMES.splice(i,1);saveInv();render()}});
+}
+const TITLE={home:'首頁',day:'日期查詢',cal:'月曆',rooms:'房數查詢',agency:'旅行社查詢',act:'實績輸入',rpt:'月報輸出',inv:'請求書管理',all:'全部團體'};
 function render(){
   buildMerge();
-  ({home:viewHome,day:()=>viewDay(qDay),cal:viewCal,rooms:viewRooms,agency:viewAgency,act:viewAct,rpt:viewReport,all:viewAll})[tab]();
+  ({home:viewHome,day:()=>viewDay(qDay),cal:viewCal,rooms:viewRooms,agency:viewAgency,act:viewAct,rpt:viewReport,inv:viewInv,all:viewAll})[tab]();
   const c=s=>data.filter(g=>g.status===s).length;
   $('#ttl').innerHTML=(`<div class="ttl"><h2>${TITLE[tab]}</h2><span class="pill">共 ${data.length} 筆（決定 ${c('決定')}・假預約 ${c('假預約')}・waiting ${c('waiting')}・取消 ${c('キャンセル')}）｜連住合併後 ${MITEMS.length} 件</span></div>`)}
 
