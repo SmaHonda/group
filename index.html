@@ -106,6 +106,10 @@ span.pk-t{cursor:default}
 .pkpop .tdy{border-color:var(--or)}
 .pkpop .sel{background:var(--acc);border-color:var(--bd);font-weight:900}
 .pk-f{display:flex;justify-content:space-between;margin-top:10px}.pk-f .b{padding:1px 12px;box-shadow:none;border-width:2px}
+.ms{position:relative;align-self:flex-end}
+.mspop{position:absolute;z-index:50;top:calc(100% + 6px);left:0;min-width:230px;max-height:340px;overflow:auto;background:var(--panel);border:3px solid var(--bd);border-radius:14px;box-shadow:4px 4px 0 var(--bd);padding:10px 14px}
+.mspop[hidden]{display:none}
+.mso{flex-direction:row;align-items:center;gap:8px;color:var(--ink);font-size:14px;padding:3px 0;cursor:pointer}.mso .hint{margin-left:auto}
 </style>
 </head>
 <body>
@@ -175,7 +179,7 @@ const ACT=[['actSingle','單人房 間數','number','實績_單人房數'],['pri
 const ALLF=FIELDS.concat(ACT);
 const STATUS=['決定','假預約','waiting','キャンセル'];
 const normStatus=v=>{const o=String(v??'').trim(),t=o.toLowerCase();if(STATUS.includes(o))return o;if(t==='waiting'||o==='キャンセル待ち'||o==='ウェイティング')return 'waiting';if(o==='仮予約'||o==='仮')return '假預約';if(t==='cancel'||o==='ｷｬﾝｾﾙ')return 'キャンセル';return '決定'};
-let data=[];let cap=0;let extra=2;let tab='home';let homeMin=90;
+let data=[];let cap=0;let extra=2;let tab='home';let homeMin=100;
 try{data=JSON.parse(localStorage.getItem('grp')||'[]');cap=+localStorage.getItem('cap')||0;const ex=localStorage.getItem('extra');if(ex!==null)extra=+ex||0}catch(e){}
 const save=()=>{try{localStorage.setItem('grp',JSON.stringify(data));localStorage.setItem('cap',cap);localStorage.setItem('extra',extra)}catch(e){}};
 
@@ -302,7 +306,7 @@ function detHTML(m){
 const statsHTML=o=>`<div class="stats"><div>預約房數<b>${o.rooms}</b></div><div>系統登錄房數<b style="color:var(--ok)">${o.colB}＋${o.colX}</b></div><div>集客人數<b>${o.people}</b></div><div>未系統登錄<b>${o.unreg} 團</b></div><div>團數<b>${o.list.length}</b></div><div>已FINAL<b>${o.fin}／${o.list.length}</b></div>${cap?`<div>剩餘房數<b class="${cap-o.rooms<=0?'risk':''}">${cap-o.rooms}</b></div>`:''}</div>`;
 
 // ---- views
-let qDay=today(),qMin=90,qOpen=null,qFrom=today(),qMonth=today().slice(0,7);
+let qDay=today(),qMin=100,qOpen=null,qFrom=today(),qMonth=today().slice(0,7);
 function viewDay(d){
   const occ=occupancy();const o=occ.get(d)||EMPTY();
   const ex=[...o.wait,...data.filter(g=>g.status==='キャンセル'&&stays(g,d)).map(g=>entry(g,d))];
@@ -381,22 +385,24 @@ function viewCal(){
   document.querySelector('[data-thism]').onclick=()=>{qMonth=today().slice(0,7);viewCal()};
   document.querySelectorAll('[data-day]').forEach(c=>c.onclick=()=>goDay(c.dataset.day));
 }
-let qAg='',qAgShow='active',qAgSort='count',qAgHide=true,qAgAll=false;
+let qAg='',qAgShow='active',qAgSort='count',qAgHide=true,qAgAll=false,qAgRun='';
+const runOk=m=>!qAgRun||m.rows.some(r=>r.run===qAgRun);
 const past=m=>m.cin&&m.cin<today()&&m.rows.every(isFinal);
 const vis=m=>qAgAll||!past(m);
 const byCin=(a,b)=>(a.cin||'').localeCompare(b.cin||'');
 function viewAgency(){
   const by=new Map();
-  MITEMS.forEach(m=>{const a=m.g.agency;if(!a||!vis(m)||!inMonths(m,MS.ag))return;let o=by.get(a);if(!o)by.set(a,o={name:a,act:0,canc:0});m.g.status==='キャンセル'?o.canc++:o.act++});
+  MITEMS.forEach(m=>{const a=m.g.agency;if(!a||!vis(m)||!inMonths(m,MS.ag)||!runOk(m))return;let o=by.get(a);if(!o)by.set(a,o={name:a,act:0,canc:0});m.g.status==='キャンセル'?o.canc++:o.act++});
   let names=[...by.values()];if(qAgShow==='active')names=names.filter(o=>o.act>0);
   const nm=(a,b)=>a.name.localeCompare(b.name,'ja');
   names.sort(qAgSort==='name'?nm:qAgSort==='asc'?(a,b)=>a.act-b.act||nm(a,b):(a,b)=>b.act-a.act||nm(a,b));
   if(!names.find(o=>o.name===qAg))qAg=names[0]?names[0].name:'';
-  const items=MITEMS.filter(m=>m.g.agency===qAg&&!(qAgHide&&m.g.status==='キャンセル')&&vis(m)&&inMonths(m,MS.ag)).sort(byCin);
+  const items=MITEMS.filter(m=>m.g.agency===qAg&&!(qAgHide&&m.g.status==='キャンセル')&&vis(m)&&inMonths(m,MS.ag)&&runOk(m)).sort(byCin);
   const live=items.filter(m=>counted(m.g));
   $('#view').innerHTML=`<div class="panel"><div class="bar" style="margin:0">
     <label>顯示<select id="qas"><option value="active" ${qAgShow==='active'?'selected':''}>只顯示有團體的旅行社</option><option value="all" ${qAgShow==='all'?'selected':''}>全部旅行社（含全部取消）</option></select></label>
     <label>排序<select id="qao"><option value="count" ${qAgSort==='count'?'selected':''}>團體數：多 → 少</option><option value="asc" ${qAgSort==='asc'?'selected':''}>團體數：少 → 多</option><option value="name" ${qAgSort==='name'?'selected':''}>名稱</option></select></label>
+    <label>催行狀態<select id="qar"><option value="">全部</option>${RUNST.map(o=>`<option ${qAgRun===o?'selected':''}>${o}</option>`).join('')}</select></label>
     <label style="flex-direction:row;align-items:center;gap:6px;color:var(--ink)"><input type="checkbox" id="qah" ${qAgHide?'checked':''}> 不顯示已取消的團體</label>
     <label style="flex-direction:row;align-items:center;gap:6px;color:var(--ink)"><input type="checkbox" id="qaa" ${qAgAll?'checked':''}> 顯示所有團體（含已FINAL且已入住）</label>
     <span class="hint">共 ${names.length} 間${qAgAll?'':`；已隱藏 ${MITEMS.filter(m=>past(m)&&m.g.status!=='キャンセル').length} 團（已FINAL且入住日已過）`}。「有團體」＝至少一個未取消的團（決定、假預約、waiting）；連住合併算 1 團。</span></div>${monthChips('ag')}</div>
@@ -404,21 +410,29 @@ function viewAgency(){
    ${qAg?`<div class="mr"><h3 class="big">${esc(qAg)}</h3>
    <div class="stats"><div>團體數<b>${live.length}</b></div><div>總房晚<b>${live.reduce((s,m)=>s+m.rows.reduce((a,g)=>a+roomsOf(g)*nightsOf(g),0),0)}</b></div><div>集客人數<b>${live.reduce((s,m)=>s+Math.max(0,...m.rows.map(r=>N(r.latest))),0)}</b></div></div>
    <div class="tw"><table>${HEAD_NA}${groupRows(items.map(mEntry),true)}</table></div></div>`:''}</div>`;
-  bindChips('ag',viewAgency);$('#qaa').onchange=e=>{qAgAll=e.target.checked;viewAgency()};$('#qah').onchange=e=>{qAgHide=e.target.checked;viewAgency()};$('#qas').onchange=e=>{qAgShow=e.target.value;viewAgency()};$('#qao').onchange=e=>{qAgSort=e.target.value;viewAgency()};
+  bindChips('ag',viewAgency);$('#qar').onchange=e=>{qAgRun=e.target.value;viewAgency()};$('#qaa').onchange=e=>{qAgAll=e.target.checked;viewAgency()};$('#qah').onchange=e=>{qAgHide=e.target.checked;viewAgency()};$('#qas').onchange=e=>{qAgShow=e.target.value;viewAgency()};$('#qao').onchange=e=>{qAgSort=e.target.value;viewAgency()};
   document.querySelectorAll('[data-ag]').forEach(x=>x.onclick=()=>{qAg=x.dataset.ag;viewAgency()});
 }
 let qText='',qStat='',qRun='',qFin='';
+let qAllSeg=new Set(),segOpen=false;
 const matchQ=g=>{const q=qText.trim().toLowerCase();return !q||[g.name,g.id,g.custId,g.tcId,g.dId].some(x=>String(x??'').toLowerCase().includes(q))};
 function viewAll(){
-  const list=MITEMS.filter(m=>(!qStat||m.g.status===qStat)&&(!qRun||(m.g.run||'')===qRun)&&(!qFin||m.rows.every(r=>normFin(r.final)===qFin))&&m.rows.some(matchQ)&&inMonths(m,MS.all)).sort(byCin);
+  const list=MITEMS.filter(m=>(!qStat||m.g.status===qStat)&&(!qRun||(m.g.run||'')===qRun)&&(!qFin||m.rows.every(r=>normFin(r.final)===qFin))&&m.rows.some(matchQ)&&inMonths(m,MS.all)&&(!qAllSeg.size||qAllSeg.has(segOf(m.g)||'__'))).sort(byCin);
   const unreg=data.filter(g=>!g.registered&&(g.status==='決定'||g.status==='假預約')).length;
+  const segList=[...new Set(MITEMS.map(m=>segOf(m.g)||'__'))].sort((a,b)=>a==='__'?1:b==='__'?-1:a.localeCompare(b));
+  const segName=x=>x==='__'?'（空白）':x;
+  const segLabel=!qAllSeg.size?'全部':qAllSeg.size<=2?[...qAllSeg].map(segName).join('、'):qAllSeg.size+' 項';
+  const segDD=`<div class="ms"><button type="button" class="b" id="msb">セグメント：${esc(segLabel)} ▾</button><div class="mspop" ${segOpen?'':'hidden'}>${segList.map(x=>`<label class="mso"><input type="checkbox" data-seg="${esc(x)}" ${qAllSeg.has(x)?'checked':''}> ${esc(segName(x))} <span class="hint">${MITEMS.filter(m=>(segOf(m.g)||'__')===x).length}</span></label>`).join('')}<div class="pk-f"><button type="button" class="b" data-segall>全部（清除選擇）</button></div></div></div>`;
   $('#view').innerHTML=`<div class="panel"><div class="bar"><label>搜尋団体名<input id="qt" value="${esc(qText)}" placeholder="団体名（也可輸入編號）"></label>
    <label>狀態<select id="qs"><option value="">全部</option>${STATUS.map(s=>`<option ${qStat===s?'selected':''}>${s}</option>`).join('')}</select></label>
    <label>催行狀態<select id="qr"><option value="">全部</option>${RUNST.map(s=>`<option ${qRun===s?'selected':''}>${s}</option>`).join('')}</select></label>
    <label>FINAL<select id="qf2"><option value="">全部</option>${FINST.map(o=>`<option ${qFin===o?'selected':''}>${o}</option>`).join('')}</select></label>
-   <span class="hint">${list.length} 件（連住已合併）；決定／假預約中尚未系統登錄：<b>${unreg}</b> 筆</span></div>${monthChips('all')}
+   ${segDD}<span class="hint">${list.length} 件（連住已合併）；決定／假預約中尚未系統登錄：<b>${unreg}</b> 筆</span></div>${monthChips('all')}
    <div class="tw">${list.length?`<table>${HEAD}${groupRows(list.map(mEntry))}</table>`:'<div class="empty">沒有符合的團體。</div>'}</div></div>`;
   $('#qt').onchange=e=>{qText=e.target.value;$('#qs0').value=qText;viewAll()};$('#qs').onchange=e=>{qStat=e.target.value;viewAll()};$('#qr').onchange=e=>{qRun=e.target.value;viewAll()};$('#qf2').onchange=e=>{qFin=e.target.value;viewAll()};bindChips('all',viewAll);
+  $('#msb').onclick=()=>{segOpen=!segOpen;document.querySelector('.mspop').hidden=!segOpen};
+  document.querySelectorAll('[data-seg]').forEach(c=>c.onchange=()=>{const k=c.dataset.seg;c.checked?qAllSeg.add(k):qAllSeg.delete(k);segOpen=true;viewAll()});
+  document.querySelector('[data-segall]').onclick=()=>{qAllSeg.clear();segOpen=true;viewAll()};
 }
 // ---- 實績
 const N=x=>(x===''||x==null||isNaN(x))?0:+x;
@@ -859,6 +873,7 @@ function openCfg(){
 
 // ---- wiring
 $('#cfg').onclick=openCfg;$('#pull').onclick=pull;
+document.addEventListener('click',e=>{if(segOpen&&!e.target.closest('.ms')){segOpen=false;document.querySelectorAll('.mspop').forEach(p=>p.hidden=true)}});
 $('#tabs').onclick=e=>{const bt=e.target.closest('button');const t=bt&&bt.dataset.t;if(!t)return;tab=t;document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b===bt));render()};
 $('#view').onclick=e=>{const iv=e.target.closest('[data-inv]');if(iv){toggleInv(iv.dataset.inv);return}
   const r=e.target.closest('tr[data-id]');if(r){openEdit(r.dataset.id);return}
