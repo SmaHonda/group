@@ -182,7 +182,7 @@ const ACT=[['actSingle','單人房 間數','number','實績_單人房數'],['pri
 ['actTriple','三人房 間數','number','實績_三人房數'],['priceTriple','三人房 單價（每人）','number','實績_三人房單價'],
 ['actTC','T/C 用房數','number','實績_T/C房數'],['priceTC','T/C 單價','number','實績_T/C單價'],
 ['actD','D 用房數','number','實績_D房數'],['priceD','D 單價','number','實績_D單價'],
-['actPeople','實際入住人數','number','實績_人數'],['actSoine','添い寝人數','number','實績_添い寝人數'],['priceSoine','添い寝單價','number','實績_添い寝單價'],['actOther','その他追加 數量','number','實績_その他數量'],['priceOther','その他追加 單價','number','實績_その他單價'],['otherIn','その他 計入總金額','text','實績_その他計入金額'],['actNote','實績備註','text','實績備註'],['actAt','實績更新日','date','實績更新日']];
+['actPeople','實際入住人數','number','實績_人數'],['actRoomsAll','實際室數','number','實績_實際室數'],['actSoine','添い寝人數','number','實績_添い寝人數'],['priceSoine','添い寝單價','number','實績_添い寝單價'],['actOther','その他追加 數量','number','實績_その他數量'],['priceOther','その他追加 單價','number','實績_その他單價'],['otherIn','その他 計入總金額','text','實績_その他計入金額'],['actNote','實績備註','text','實績備註'],['actAt','實績更新日','date','實績更新日']];
 const ALLF=FIELDS.concat(ACT);
 const STATUS=['決定','假預約','waiting','キャンセル'];
 const normStatus=v=>{const o=String(v??'').trim(),t=o.toLowerCase();if(STATUS.includes(o))return o;if(t==='waiting'||o==='キャンセル待ち'||o==='ウェイティング')return 'waiting';if(o==='仮予約'||o==='仮')return '假預約';if(t==='cancel'||o==='ｷｬﾝｾﾙ')return 'キャンセル';return '決定'};
@@ -448,11 +448,14 @@ function viewAll(){
 }
 // ---- 實績
 const N=x=>(x===''||x==null||isNaN(x))?0:+x;
-const actRooms=g=>N(g.actSingle)+N(g.actTwin)+N(g.actTriple)+N(g.actTC)+N(g.actD);
+const roomSum=g=>N(g.actSingle)+N(g.actTwin)+N(g.actTriple)+N(g.actTC)+N(g.actD);   // 房型加總（客房＋T/C・D）
+const actRooms=g=>(g.actRoomsAll!==''&&g.actRoomsAll!=null)?N(g.actRoomsAll):roomSum(g);   // 實際室數：有手動值用手動，否則用加總
 const actRev=g=>N(g.actSingle)*1*N(g.priceSingle)+N(g.actTwin)*2*N(g.priceTwin)+N(g.actTriple)*3*N(g.priceTriple)+N(g.actTC)*N(g.priceTC)+N(g.actD)*N(g.priceD)+N(g.actSoine)*N(g.priceSoine)+((g.otherIn||'計入')!=='不計入'?N(g.actOther)*N(g.priceOther):0); // 房型單價是「每人」單價，間數×人數×單價
 const guests=o=>N(o.actSingle)+2*N(o.actTwin)+3*N(o.actTriple)+N(o.actTC)+N(o.actD); // 整團人數：客人＋T/C・D 各1人（不含添い寝）
 const ACT_DEF={actTC:1,priceTC:8000,actD:1,priceD:8000}; // 新輸入時 T/C・D 的預設
 const AUTO={priceSingle:o=>o.priceTwin===''||o.priceTwin==null?'':N(o.priceTwin)+4000,priceTriple:o=>o.priceTwin===''||o.priceTwin==null?'':N(o.priceTwin)-1000}; // 單人＝雙人＋4000、三人＝雙人−1000
+const zeroNight=g=>{const a=pd(g.cin),b=pd(g.cout);if(a!=null&&b!=null)return b<=a;return g.nights!==''&&g.nights!=null&&+g.nights===0};
+const isDayTrip=g=>zeroNight(g)&&N(g.rooms)===0;   // 日歸（0泊、無室數）：不用登實績
 const hasAct=g=>['actSingle','actTwin','actTriple','actTC','actD'].some(k=>g[k]!==''&&g[k]!=null);
 function nightsInMonth(g,mo){const a=pd(g.cin);if(a==null)return 0;const [y,m]=mo.split('-').map(Number);const s0=Date.UTC(y,m-1,1),e0=Date.UTC(y,m,1);let c=0;for(let i=0;i<nightsOf(g);i++){const d=a+i*DAY;if(d>=s0&&d<e0)c++}return c}
 const actPpl=g=>g.actPeople!==''&&g.actPeople!=null?N(g.actPeople):guests(g);   // 實際人數（未輸入為0）
@@ -471,7 +474,7 @@ function viewAct(){
   const rn=g=>day?(stays(g,qActDay)?1:0):nightsInMonth(g,qActMonth);
   const dayRow=x=>day?x.rows.find(g=>stays(g,qActDay)):null;
   const rowsIn=x=>day?[dayRow(x)]:x.rows;
-  const pool=MITEMS.filter(x=>x.g.status==='決定'&&x.cin&&x.cin<=t);
+  const pool=MITEMS.filter(x=>x.g.status==='決定'&&x.cin&&x.cin<=t&&!x.rows.every(isDayTrip));
   const segs=[...new Set(pool.map(x=>segOf(x.g)).filter(Boolean))].sort();
   const base=pool.filter(x=>(day?x.rows.some(g=>stays(g,qActDay)):(x.cin<me&&x.cout>ms))&&(!qActSeg||segOf(x.g)===qActSeg)).sort(byCin);
   const items=base.filter(x=>!qActTodo||!rowsIn(x).every(hasAct));
@@ -487,7 +490,7 @@ function viewAct(){
     <label>セグメント<select id="qas2"><option value="">全部</option>${segs.map(x=>`<option ${qActSeg===x?'selected':''}>${esc(x)}</option>`).join('')}</select></label>
     <label style="flex-direction:row;align-items:center;gap:6px;color:var(--ink)"><input type="checkbox" id="qat" ${qActTodo?'checked':''}> 只看尚未輸入完成的</label></div>
     <div class="stats"><div>已入住團數<b>${base.length}</b></div><div>實績輸入完成<b style="color:var(--ok)">${done}／${base.length}</b></div><div>${per}實績房晚<b>${rmN}</b></div><div>${per}實績人晚<b>${pplN}</b></div><div>${per}實績金額<b>${num(rv)}</b></div><div>${per}平均室單價<b>${rmN?num(Math.round(rv/rmN)):'—'}</b></div></div>
-    <div class="hint">已入住（入住日≤今天）且狀態為「決定」的團。點一列輸入實績；只寫入實績欄位，不動預約資料。金額＝各房型間數×人數×每人單價＋T/C・D＋添い寝＋その他（預設計入）；平均單價＝金額÷實際室數（每間房）。實際室數、實際人數都是整團（客人＋T/C・D，人數不含添い寝），未輸入為 0。上一次處理的那一列會反色，點下一列後解除。</div></div>
+    <div class="hint">已入住（入住日≤今天）且狀態為「決定」的團；日歸（0 泊且沒有室數）的團不需要登實績，不會列出。點一列輸入實績；只寫入實績欄位，不動預約資料。金額＝各房型間數×人數×每人單價＋T/C・D＋添い寝＋その他（預設計入）；平均單價＝金額÷實際室數（每間房）。實際室數、實際人數都是整團（客人＋T/C・D，人數不含添い寝），未輸入為 0。上一次處理的那一列會反色，點下一列後解除。</div></div>
     <div class="panel tw">${items.length?`<table><tr><th>期間</th><th>団体名</th><th>旅行会社</th><th>セグメント</th>${ACTHEAD}<th>實績輸入</th><th class="n">平均單價</th><th class="n">金額</th></tr>
     ${items.map(x=>{const rr=rowsIn(x),k=rr.filter(hasAct).length,n=rr.length,dr=dayRow(x);
      const it=x.rows.reduce((a,g)=>a+rn(g)*actRev(g),0),rmm=x.rows.reduce((a,g)=>a+rn(g)*actRooms(g),0);
@@ -513,7 +516,7 @@ function actDone(tg,name,key,nextIdx,nextDate){
   $('#frm').oninput=null;$('#frm').onsubmit=e=>e.preventDefault();
   $('#frm').innerHTML=`<h3 style="margin-top:0">已寫入實績：${esc(name)}</h3><p class="hint">請再確認輸入後的總室數與總人數。</p>
    <div class="stats"><div>總室數（每晚）<b>${rooms}</b></div><div>總人數（每晚）<b>${ppl}</b></div><div>套用晚數<b>${M}</b></div><div>金額合計<b>${num(rev)}</b></div><div>平均室單價<b>${rooms*M?num(Math.round(rev/(rooms*M))):'—'}</b></div></div>
-   <p class="hint">總室數＝客房 ${guestRooms(g)}＋T/C・D ${tcdRooms(g)}；總人數含 T/C・D，不含添い寝（${N(g.actSoine)} 人）。</p>
+   <p class="hint">總室數＝客房 ${guestRooms(g)}＋T/C・D ${tcdRooms(g)}${rooms!==guestRooms(g)+tcdRooms(g)?'（已手動調整，與房型加總不同）':''}；總人數含 T/C・D，不含添い寝（${N(g.actSoine)} 人）。</p>
    <div class="bar" style="justify-content:flex-end;margin:12px 0 0">${nextIdx!=null?`<button type="button" class="b" id="ok3">繼續輸入下一晚（${esc(nextDate)}）</button>`:''}<button type="button" class="b p" id="ok2">確認，回到總表</button></div>`;
   $('#ok2').onclick=()=>$('#dlg').close();
   if(nextIdx!=null)$('#ok3').onclick=()=>{$('#dlg').close();openAct(key,nextIdx)};
@@ -529,6 +532,7 @@ function openAct(key,startIdx){
   const fld=(k,l,vals,note)=>`<label>${l}${note||''}<input name="${k}" type="number" inputmode="decimal" step="any" min="0" value="${esc(vals[k]??'')}"></label>`;
   function draw(vals,scope){
     let manual=vals.actPeople!==''&&N(vals.actPeople)!==guests(vals);
+    let manualR=vals.actRoomsAll!==''&&N(vals.actRoomsAll)!==roomSum(vals);
     const isMan=k=>{const d=AUTO[k](vals);return vals[k]!==''&&(d===''||N(vals[k])!==d)};
     const man={priceSingle:isMan('priceSingle'),priceTriple:isMan('priceTriple')};
     const cr=rowOf(scope);
@@ -542,7 +546,7 @@ function openAct(key,startIdx){
     <div class="act-auto"><div class="act-t">② 系統帶出，請確認（可直接修改）</div>
       <div class="grid">${fld('priceSingle','單人房 單價（每人）',vals,' <span class="hint">＝雙人＋4000</span>')}${fld('priceTriple','三人房 單價（每人）',vals,' <span class="hint">＝雙人−1000</span>')}
       ${fld('actTC','T/C 用房數',vals)}${fld('priceTC','T/C 單價',vals)}${fld('actD','D 用房數',vals)}${fld('priceD','D 單價',vals)}
-      ${fld('actPeople','實際人數',vals,' <span id="cp" class="cont"></span>')}</div>
+      ${fld('actRoomsAll','實際室數（含T/C・D）',vals,' <span id="cr" class="cont"></span>')}${fld('actPeople','實際人數',vals,' <span id="cp" class="cont"></span>')}</div>
       <div class="act-sum" id="pv"></div></div>
     <details class="act-more"><summary>③ 其他（添い寝、その他追加、備註）</summary><div class="grid" style="margin-top:8px">
       ${fld('actSoine','添い寝人數',vals,' <span class="hint">（不計入人數）</span>')}${fld('priceSoine','添い寝單價',vals)}
@@ -550,14 +554,17 @@ function openAct(key,startIdx){
       <label>その他 是否計入總金額<select name="otherIn"><option ${(vals.otherIn||'計入')==='計入'?'selected':''}>計入</option><option ${vals.otherIn==='不計入'?'selected':''}>不計入</option></select></label>
       <label class="w2">實績備註<input name="actNote" value="${esc(vals.actNote??'')}"></label></div></details>
     <div class="bar" style="justify-content:flex-end;margin:12px 0 0"><button type="button" class="b" id="ax">取消</button><button class="b p">儲存</button></div>`;
-    const inp=qf('actPeople'),ti=qf('taxIncl'),pt=qf('priceTwin');
+    const inp=qf('actPeople'),inpR=qf('actRoomsAll'),ti=qf('taxIncl'),pt=qf('priceTwin');
     const pv=()=>{const fm=new FormData($('#frm'));const o={};ACT.forEach(([k])=>o[k]=fm.get(k)??'');
       ['priceSingle','priceTriple'].forEach(k=>{if(!man[k]){const d=AUTO[k](o);qf(k).value=d;o[k]=d}});
+      const rs=roomSum(o);if(!manualR)inpR.value=rs>0?rs:'';o.actRoomsAll=inpR.value;
+      $('#cr').textContent=`房型換算 ${rs} 間${rs&&N(inpR.value)!==rs?' ⚠與輸入不同':rs?' ✓':''}`;
       const gp=guests(o);if(!manual)inp.value=gp>0?gp:'';const cur=inp.value===''?0:+inp.value;o.actPeople=inp.value;
       $('#cp').textContent=`房型換算 ${gp} 人${gp&&cur!==gp?' ⚠與輸入不同':gp?' ✓':''}`;
       const rv=actRev(o),rm=actRooms(o);
       $('#pv').innerHTML=`<div>總室數<b>${rm}</b><small>客房 ${guestRooms(o)}＋T/C・D ${tcdRooms(o)}</small></div><div>總人數<b>${cur||gp}</b><small>含 T/C・D，不含添い寝 ${N(o.actSoine)}</small></div><div>金額<b>${num(rv)}</b><small>單價×人數</small></div><div>平均室單價<b>${rm?num(Math.round(rv/rm)):'—'}</b></div>`};
     inp.oninput=()=>{manual=inp.value!==''};
+    inpR.oninput=()=>{manualR=inpR.value!==''};
     ['priceSingle','priceTriple'].forEach(k=>{const el=qf(k);el.oninput=()=>{man[k]=el.value!==''}});
     ti.oninput=()=>{pt.value=ti.value===''?'':Math.round(N(ti.value)/(1+taxRate/100))};
     pt.tabIndex=-1;
