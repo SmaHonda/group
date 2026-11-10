@@ -117,6 +117,7 @@ span.pk-t{cursor:default}
 .act-sum{display:flex;flex-wrap:wrap;gap:6px 26px;margin-top:12px;padding-top:10px;border-top:2px solid var(--line)}
 .act-sum div{font-size:12px;color:var(--sub)}.act-sum b{display:block;font:900 26px/1.2 "Noto Serif TC",serif;color:var(--ink)}.act-sum small{display:block;font-size:11.5px}
 details.act-more summary{cursor:pointer;font-weight:700;margin:12px 0 4px}
+.hb-sec{margin-top:16px}.grid .wf{grid-column:1/-1}.grid textarea{width:100%;resize:vertical}
 </style>
 </head>
 <body>
@@ -129,6 +130,7 @@ details.act-more summary{cursor:pointer;font-weight:700;margin:12px 0 4px}
   <button data-t="agency"><i>⚑</i>旅行社</button>
   <button data-t="act"><i>✎</i>實績</button>
   <button data-t="rpt"><i>▤</i>月報</button>
+  <button data-t="hb"><i>▣</i>手配書</button>
   <button data-t="inv"><i>✉</i>請求書</button>
   <button data-t="all"><i>☰</i>全部</button>
 </nav></aside>
@@ -183,7 +185,8 @@ const ACT=[['actSingle','單人房 間數','number','實績_單人房數'],['pri
 ['actTC','T/C 用房數','number','實績_T/C房數'],['priceTC','T/C 單價','number','實績_T/C單價'],
 ['actD','D 用房數','number','實績_D房數'],['priceD','D 單價','number','實績_D單價'],
 ['actPeople','實際入住人數','number','實績_人數'],['actRoomsAll','實際室數','number','實績_實際室數'],['actSoine','添い寝人數','number','實績_添い寝人數'],['priceSoine','添い寝單價','number','實績_添い寝單價'],['actOther','その他追加 數量','number','實績_その他數量'],['priceOther','その他追加 單價','number','實績_その他單價'],['otherIn','その他 計入總金額','text','實績_その他計入金額'],['actNote','實績備註','text','實績備註'],['actAt','實績更新日','date','實績更新日']];
-const ALLF=FIELDS.concat(ACT);
+const HB=[['hb','手配書資料','text','手配書資料']];   // 手配書の入力内容（JSON）
+const ALLF=FIELDS.concat(ACT,HB);
 const STATUS=['決定','假預約','waiting','キャンセル'];
 const normStatus=v=>{const o=String(v??'').trim(),t=o.toLowerCase();if(STATUS.includes(o))return o;if(t==='waiting'||o==='キャンセル待ち'||o==='ウェイティング')return 'waiting';if(o==='仮予約'||o==='仮')return '假預約';if(t==='cancel'||o==='ｷｬﾝｾﾙ')return 'キャンセル';return '決定'};
 let data=[];let cap=0;let extra=2;let tab='home';let homeMin=100;
@@ -724,10 +727,125 @@ function viewInv(){
   document.querySelectorAll('[data-ivdel]').forEach(b=>b.onclick=async()=>{const i=+b.dataset.ivdel,n=INV_NAMES[i];
     if(await ask('從名單移除旅行社',`<div class="ask-card"><b>${esc(n)}</b><span>${st(n).n} 團・未提供 ${st(n).todo} 團</span></div><p>移除後，這間旅行社的團就不會再顯示「請求書」欄與提醒。已記錄的提供日不會被刪除。</p>`,'移除',true)){INV_NAMES.splice(i,1);saveInv();render()}});
 }
-const TITLE={home:'首頁',day:'日期查詢',cal:'月曆',rooms:'房數查詢',agency:'旅行社查詢',act:'實績輸入',rpt:'月報輸出',inv:'請求書管理',all:'全部團體'};
+
+// ---- 手配書（募集バス手配書）
+const HB_TPL="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";
+// ---- 手配書：以範本填入資料並產生 xlsx
+async function hbBuild(ExcelJS,tplBuf,info,h){
+  const wb=new ExcelJS.Workbook();await wb.xlsx.load(tplBuf);const ws=wb.worksheets[0];
+  const set=(a,v)=>{if(v!==''&&v!=null&&!(typeof v==='number'&&isNaN(v)))ws.getCell(a).value=v};
+  const num=v=>(v===''||v==null||isNaN(v))?'':+v;
+  const tm=v=>{const m=String(v||'').match(/^(\d{1,2}):(\d{2})/);return m?(+m[1]*60+ +m[2])/1440:''};
+  const dt=s=>{const m=String(s||'').match(/^(\d{4})-(\d{2})-(\d{2})/);return m?new Date(Date.UTC(+m[1],+m[2]-1,+m[3])):''};
+  const cid=String(info.custId||'').trim();
+  set('A3',/^\d+$/.test(cid)?+cid:cid);
+  set('I5',h.staff);set('B6',dt(info.cin));set('E6',tm(h.arrive));set('H6',tm(h.depart));
+  if(info.nights>1)set('F6',dt(info.cout));
+  set('C7',info.name);
+  const so=num(h.soine);if(so)set('K9',`（+添い寝${so}名）`);
+  set('F10',info.agency);set('H10',info.office);
+  [['D12','st1'],['D13','st2'],['D14','st3'],['D15','ja3'],['D16','dt2']].forEach(([a,k])=>set(a,num(h[k])));
+  set('H13',num(h.twinTax));set('K17',num(h.child));
+  set('C17',`${info.nights||1}泊2食`);
+  set('E19',h.dinPlace);set('G19',h.dinNote);set('E22',h.bfPlace);set('F22',h.bfStart);
+  const OPT=['１．バウチャー','２．クーポン','３．現金','４．売掛'];
+  [['D24','payStay'],['D25','payTax'],['D26','payBath']].forEach(([a,k])=>{const sel=h[k];set(a,OPT.map(o=>o===sel?`【${o}】`:o).join('　　　'))});
+  set('D27',num(h.tcPrice));set('E27',num(h.tcQty));set('F27',h.tcNote);
+  set('D28',num(h.dPrice));set('E28',num(h.dQty));set('F28',h.dNote);
+  set('C29',h.tcName);set('F29',h.tcPhone);set('I29',h.fax);
+  const cm=num(h.crewM),cf=num(h.crewF);if(cm!==''||cf!==''){set('C30',(cm||0)+(cf||0));set('E30',`名 Ｍ－${cm||0}　　Ｆ－${cf||0}`)}
+  set('I30',info.tcId);set('I31',info.dId);set('I32','-');
+  set('C31',h.lastSite);set('G31',h.lastDepart);set('C32',h.infoContact);set('G32',h.dinCall);set('C33',h.shopNight);set('F33',h.shopMorn);
+  String(h.diet||'').split(/\r?\n/).filter(x=>x.trim()).slice(0,10).forEach((x,i)=>set('K'+(31+i),x.trim()));
+  String(h.req||'').split(/\r?\n/).filter(x=>x.trim()).slice(0,10).forEach((x,i)=>set('N'+(31+i),x.trim()));
+  set('C35',h.mealNote);set('C40',h.arrange);
+  return wb.xlsx.writeBuffer();
+}
+
+const HB_OPT=['','１．バウチャー','２．クーポン','３．現金','４．売掛'];
+const HBF=[['sec','基本'],['staff','担当者','text'],['arrive','到着時間','time'],['depart','出発時間','time'],
+ ['sec','房型・料金'],['st1','ST1 單人房 間數','num'],['st2','ST2 雙人房 間數','num'],['st3','ST3 三人房 間數','num'],['ja3','JA3 間數','num'],['dt2','DT2 間數','num'],
+ ['twinTax','雙人房 每人單價（含稅）','num'],['child','子供料金（含稅）','num'],['soine','添い寝 人數','num'],
+ ['sec','食事'],['dinPlace','夕食 會場','text'],['dinNote','夕食 備考（巴士等）','text'],['bfPlace','朝食 會場','text'],['bfStart','朝食 開始時間','text'],['mealNote','食事備註（過敏、不吃的食材…）','area'],
+ ['sec','支払条件'],['payStay','宿泊','sel'],['payTax','消費稅','sel'],['payBath','入湯稅','sel'],
+ ['sec','T/C・司機'],['tcPrice','T/C 料金（含稅）','num'],['tcQty','T/C 數量','num'],['tcNote','T/C 備考','text'],['dPrice','司機 料金（含稅）','num'],['dQty','司機 數量','num'],['dNote','司機 備考','text'],
+ ['sec','其他聯絡'],['tcName','添乗員名','text'],['tcPhone','携帯電話','text'],['fax','FAX','text'],['crewM','乗務員 男','num'],['crewF','乗務員 女','num'],['lastSite','最終見学地','text'],['lastDepart','最終見学地 出発時間','text'],['infoContact','館内案内連絡','text'],['dinCall','夕食時間指定連絡','text'],['shopNight','売店營業 夜','text'],['shopMorn','売店營業 朝','text'],
+ ['sec','清單'],['diet','食事過敏・禁忌清單（一行一項，最多 10 行）','area'],['req','特別要望清單（一行一項，最多 10 行）','area'],['arrange','手配事項','text']];
+const HB_LAST=['staff','arrive','depart','dinPlace','dinNote','bfPlace','bfStart','tcNote','dNote','payStay','payTax','payBath','infoContact'];
+function hbGet(m){try{return JSON.parse(m.rows[0].hb||'null')||null}catch(e){return null}}
+function hbDefaults(m){
+  const g=m.g;let last={};try{last=JSON.parse(localStorage.getItem('hbLast')||'{}')}catch(e){}
+  const up=N(g.unitPerson),taxIn=/込/.test(String(g.tax||''))&&!/別/.test(String(g.tax||''));const q=extraOf(g)>0?1:0;
+  return Object.assign({arrive:'18:00',depart:'08:00',st2:N(g.rooms)||'',twinTax:up?Math.round(up*(taxIn?1:1.1)):'',tcQty:q,dQty:q,tcPrice:q?8800:'',dPrice:q?8800:''},last);
+}
+const hbInfo=m=>({custId:m.g.custId,tcId:m.g.tcId,dId:m.g.dId,name:m.g.name,agency:m.g.agency,office:m.g.office,cin:m.cin,cout:m.cout,nights:m.nights});
+async function hbDownload(m,h){
+  const buf=await hbBuild(ExcelJS,s2b(HB_TPL),hbInfo(m),h);
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  a.download=`手配書_${String(m.g.name||'').replace(/[\\/:*?"<>|\s]+/g,'_')}_${String(m.cin).replace(/-/g,'')}.xlsx`;a.click();
+}
+function hbRead(){
+  const fm=new FormData($('#frm'));const o={};
+  HBF.forEach(f=>{if(f[0]==='sec')return;let x=fm.get(f[0])??'';if(f[2]==='num'&&x!=='')x=+x;o[f[0]]=x});return o;
+}
+function openHb(key,draft){
+  const m=MBYKEY.get(key);if(!m)return;const g=m.g;const saved=hbGet(m);
+  const v=draft||Object.assign(hbDefaults(m),saved||{});
+  let html='',open=false;
+  HBF.forEach(f=>{
+    if(f[0]==='sec'){if(open)html+='</div>';html+=`<div class="act-t hb-sec">${f[1]}</div><div class="grid">`;open=true;return}
+    const [k,l,t]=f,val=v[k]??'';
+    if(t==='area')html+=`<label class="wf">${l}<textarea name="${k}" rows="4">${esc(val)}</textarea></label>`;
+    else if(t==='sel')html+=`<label>${l}<select name="${k}">${HB_OPT.map(o=>`<option value="${o}" ${val===o?'selected':''}>${o||'（未選）'}</option>`).join('')}</select></label>`;
+    else html+=`<label>${l}<input name="${k}" type="${t==='time'?'time':t==='num'?'number':'text'}" ${t==='num'?'inputmode="decimal" step="any" min="0"':''} value="${esc(val)}"></label>`;
+  });
+  if(open)html+='</div>';
+  $('#frm').oninput=null;
+  $('#frm').innerHTML=`<h3 style="margin-top:0">手配書：${esc(g.name)}</h3>
+   <div class="ask-card"><b>${lab(m.cin)} → ${lab(m.cout)}（${m.nights}泊）　${esc(g.agency||'')}／${esc(g.office||'')}</b>
+   <span>客人系統編號 ${esc(g.custId||'—')}・T/C ${esc(g.tcId||'—')}・D ${esc(g.dId||'—')}｜預約 ${N(g.rooms)} 間・${N(g.people)} 人${g.latest!==''&&g.latest!=null?`／集客 ${N(g.latest)} 人`:''}</span></div>
+   <p class="hint">黃色欄位（你原本手動更新的）已盡量用預約資料帶入；沒有的請在下面輸入。上次填過的會員常用值（担当者、會場、支払條件等）會自動帶入。</p>
+   <div class="act-sum" id="hbck" style="margin:6px 0 0;border:0;padding:0"></div>${html}
+   <div class="bar" style="justify-content:flex-end;margin:14px 0 0"><button type="button" class="b" id="hbx">取消</button><button type="button" class="b" id="hbdl">↓ 下載手配書</button><button class="b p">儲存</button></div>`;
+  if(!$('#dlg').open)$('#dlg').showModal();
+  const ck=()=>{const o=hbRead();const R=N(o.st1)+N(o.st2)+N(o.st3)+N(o.ja3)+N(o.dt2),P=N(o.st1)+2*N(o.st2)+3*N(o.st3)+3*N(o.ja3)+4*N(o.dt2),ref=N(g.latest)||N(g.people),tw=N(o.twinTax);
+    $('#hbck').innerHTML=`<div>提供室合計<b>${R} 間</b></div><div>宿泊者數<b>${P} 人</b><small>${P&&ref&&P!==ref?'<span style="color:var(--bad)">⚠ 與預約／集客人數 '+ref+' 不同</span>':P?'✓':''}</small></div><div>單人房單價<b>${tw?num(tw+4400):'—'}</b><small>＝雙人＋4,400</small></div><div>三人房單價<b>${tw?num(tw-1100):'—'}</b><small>＝雙人−1,100</small></div>`};
+  $('#frm').oninput=ck;ck();
+  $('#hbx').onclick=()=>$('#dlg').close();
+  $('#hbdl').onclick=async()=>{const b=$('#hbdl');b.disabled=true;try{await hbDownload(m,hbRead())}catch(e){alert('產生失敗：'+e.message)}b.disabled=false};
+  $('#frm').onsubmit=e=>{
+    e.preventDefault();const h=hbRead();const old=saved||{};
+    const ch=[];HBF.forEach(f=>{if(f[0]==='sec')return;const o=String(old[f[0]]??''),n=String(h[f[0]]??'');if(o===n)return;if(!saved&&n==='')return;
+      ch.push({l:f[1],old:saved?(o===''?'（空白）':o.replace(/\n/g,' / ')):'（新增）',nw:n===''?'（空白）':n.replace(/\n/g,' / ')})});
+    if(!ch.length){$('#dlg').close();return}
+    confirmView('確認儲存手配書：'+esc(g.name),ch,()=>{
+      h._at=today();m.rows[0].hb=JSON.stringify(h);
+      try{const l={};HB_LAST.forEach(k=>{if(h[k]!==''&&h[k]!=null)l[k]=h[k]});localStorage.setItem('hbLast',JSON.stringify(l))}catch(er){}
+      save();render();sync({action:'upsert',records:[toRec(m.rows[0])]});
+    },()=>openHb(key,h));
+  };
+}
+let qHbPast=false,qHbText='';
+function viewHb(){
+  const t=today();const q=qHbText.trim().toLowerCase();
+  const items=MITEMS.filter(m=>(m.g.status==='決定'||m.g.status==='假預約')&&m.cin&&(qHbPast||m.cout>=t)&&(!q||[m.g.name,m.g.agency,m.g.office].some(x=>String(x??'').toLowerCase().includes(q)))).sort(byCin);
+  $('#view').innerHTML=`<div class="panel"><div class="bar"><label>搜尋団体名／旅行社<input id="hbq" value="${esc(qHbText)}" placeholder="団体名、旅行社"></label>
+    <label style="flex-direction:row;align-items:center;gap:6px;color:var(--ink)"><input type="checkbox" id="hbp" ${qHbPast?'checked':''}> 含已退房的團</label>
+    <span class="hint">${items.length} 團。點一列填寫手配書；「↓」直接下載（沒填的欄位會留白）。</span></div>
+    <div class="tw">${items.length?`<table><tr><th>入住</th><th>団体名</th><th>旅行会社</th><th>狀態</th><th class="n">預約房</th><th class="n">預約人</th><th>手配書</th><th></th></tr>
+    ${items.map(m=>{const h=hbGet(m);const P=h?N(h.st1)+2*N(h.st2)+3*N(h.st3)+3*N(h.ja3)+4*N(h.dt2):0,ref=N(m.g.latest)||N(m.g.people);
+      return `<tr class="click" data-hb="${esc(m.key)}"><td>${lab(m.cin)} → ${lab(m.cout)}</td><td>${esc(m.g.name)}${m.rows.length>1?` <span class="cont">×${m.rows.length}</span>`:''}</td><td>${esc(m.g.agency)}</td><td>${tag(m.g.status)}</td>
+      <td class="n">${rmFmt(N(m.g.rooms),extraOf(m.g))}</td><td class="n">${fv(m.g.latest!==''&&m.g.latest!=null?m.g.latest:m.g.people)}</td>
+      <td>${h?`<span class="tag 決定">已填 ${esc(String(h._at||'').slice(5).replace('-','/'))}</span>${P&&ref&&P!==ref?' <span class="tag キャンセル">⚠人數</span>':''}`:'<span class="tag 假預約">未填</span>'}</td>
+      <td><button class="b" data-hbdl="${esc(m.key)}">↓</button></td></tr>`}).join('')}</table>`:'<div class="empty">沒有符合的團體。</div>'}</div></div>`;
+  $('#hbq').onchange=e=>{qHbText=e.target.value;viewHb()};$('#hbp').onchange=e=>{qHbPast=e.target.checked;viewHb()};
+  document.querySelectorAll('[data-hb]').forEach(r=>r.onclick=()=>openHb(r.dataset.hb));
+  document.querySelectorAll('[data-hbdl]').forEach(b=>b.onclick=async e=>{e.stopPropagation();const m=MBYKEY.get(b.dataset.hbdl);try{await hbDownload(m,Object.assign(hbDefaults(m),hbGet(m)||{}))}catch(er){alert('產生失敗：'+er.message)}});
+}
+const TITLE={home:'首頁',day:'日期查詢',cal:'月曆',rooms:'房數查詢',agency:'旅行社查詢',act:'實績輸入',rpt:'月報輸出',inv:'請求書管理',hb:'手配書',all:'全部團體'};
 function render(){
   buildMerge();
-  ({home:viewHome,day:()=>viewDay(qDay),cal:viewCal,rooms:viewRooms,agency:viewAgency,act:viewAct,rpt:viewReport,inv:viewInv,all:viewAll})[tab]();
+  ({home:viewHome,day:()=>viewDay(qDay),cal:viewCal,rooms:viewRooms,agency:viewAgency,act:viewAct,rpt:viewReport,inv:viewInv,hb:viewHb,all:viewAll})[tab]();
   const c=s=>data.filter(g=>g.status===s).length;
   $('#ttl').innerHTML=(`<div class="ttl"><h2>${TITLE[tab]}</h2><span class="pill">共 ${data.length} 筆（決定 ${c('決定')}・假預約 ${c('假預約')}・waiting ${c('waiting')}・取消 ${c('キャンセル')}）｜連住合併後 ${MITEMS.length} 件</span></div>`)}
 
